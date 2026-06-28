@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-    // FIXED: Point directly to your active live Render backend endpoint!
-    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://flight-606-version-7.vercel.app/",
+    // Live Render backend address
+    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://flight-606-version-7.onrender.com",
     
     // Enable credentials to allow cookie/session tracking if needed
     withCredentials: true 
@@ -242,5 +242,24 @@ export async function deactivateSeat(id) {
 }
 export async function reactivateSeat(id) {
     const { data: res } = await api.patch(`/seats/reactivate-seat/${id}`);
+    return res;
+}
+
+
+// ============================================================
+// PASSENGER RESOURCE
+// ============================================================
+
+// --- User: Passenger Management (Authenticated) ---
+export async function createPassenger(data) {
+    const { data: res } = await api.post("/passengers/create-passenger", data);
+    return res;
+}
+export async function getPassengerById(id) {
+    const { data: res } = await api.get(`/passengers/get-passenger/${id}`);
+    return res;
+}
+export async function getMyPassengers() {
+    const { data: res } = await api.get("/passengers/get-my-passengers");
     return res;
 }
