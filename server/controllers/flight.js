@@ -43,10 +43,14 @@ module.exports.searchFlights = (req, res) => {
 		return res.status(400).send({ message: "Departure date required" });
 	}
 
-	const startOfDay = new Date(req.query.departureDate);
-	startOfDay.setUTCHours(0, 0, 0, 0);
-	const endOfDay = new Date(req.query.departureDate);
-	endOfDay.setUTCHours(23, 59, 59, 999);
+	// Create a wider timezone buffer window (captures shifts between UTC and local time)
+	const baseDate = new Date(req.query.departureDate);
+	
+	const startOfDay = new Date(baseDate);
+	startOfDay.setUTCHours(startOfDay.getUTCHours() - 12); // Look 12 hours backward
+
+	const endOfDay = new Date(baseDate);
+	endOfDay.setUTCHours(endOfDay.getUTCHours() + 36);   // Look 36 hours forward
 
 	const originQuery = [];
 	const destQuery = [];
@@ -86,6 +90,7 @@ module.exports.searchFlights = (req, res) => {
 	})
 	.catch(err => errorHandler(err, req, res));
 };
+
 
 module.exports.getFlightById = (req, res) => {
 	return Flight.findOne({
