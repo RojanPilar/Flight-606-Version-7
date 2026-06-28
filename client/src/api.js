@@ -2,7 +2,7 @@ import axios from "axios";
 
 const api = axios.create({
     // Live Render backend address
-    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://flight-606-version-7.onrender.com",
+    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://onrender.com",
     
     // Enable credentials to allow cookie/session tracking if needed
     withCredentials: true 
@@ -247,12 +247,19 @@ export async function reactivateSeat(id) {
 
 
 // ============================================================
-// PASSENGER RESOURCE
+// PASSENGER RESOURCE (RESTORED MISSING EXPORTS)
 // ============================================================
 
-// --- User: Passenger Management (Authenticated) ---
 export async function createPassenger(data) {
     const { data: res } = await api.post("/passengers/create-passenger", data);
+    return res;
+}
+export async function createPassengerUser(data) {
+    const { data: res } = await api.post("/passengers/create-passenger-user", data);
+    return res;
+}
+export async function createPassengerGuest(data) {
+    const { data: res } = await api.post("/passengers/create-passenger-guest", data);
     return res;
 }
 export async function getPassengerById(id) {
@@ -263,10 +270,14 @@ export async function getMyPassengers() {
     const { data: res } = await api.get("/passengers/get-my-passengers");
     return res;
 }
+export async function getPassengerForGuest(params) {
+    const { data: res } = await api.get("/passengers/guest-passenger", { params });
+    return res;
+}
 
 
 // ============================================================
-// BOOKING RESOURCE (RESTORED MISSING EXPORTS)
+// BOOKING RESOURCE
 // ============================================================
 
 export async function createBookingUser(data) {
@@ -295,16 +306,11 @@ export async function cancelBookingUser(bookingReference) {
 }
 
 export async function cancelBookingGuest(bookingReference, data) {
-    const { data: res } = await api.patch(`/bookings/cancel-guest/${bookingReference}`, data);
-    return res;
+    const { data: res } = await api.patch(/bookings/cancel-guest/${bookingReference}, data);return res;
 }
 
-export async function rescheduleBookingUser(bookingReference, data) {
-    const { data: res } = await api.patch(`/bookings/reschedule/${bookingReference}`, data);
-    return res;
+export async function rescheduleBookingUser(bookingReference, data) {const { data: res } = await api.patch(/bookings/reschedule/${bookingReference}, data);return res;
 }
 
-export async function getPassengersByBooking(bookingId) {
-    const { data: res } = await api.get(`/bookingpassengers/booking/${bookingId}`);
-    return res;
+export async function getPassengersByBooking(bookingId) {const { data: res } = await api.get(/bookingpassengers/booking/${bookingId});return res;
 }
