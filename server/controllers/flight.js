@@ -4,6 +4,7 @@ const Airline = require("../models/Airline");
 const Airport = require("../models/Airport");
 const Booking = require("../models/Booking");
 const Seat = require("../models/Seat");
+const mongoose = require("mongoose");
 const { createNotification } = require("./notification");
 const { errorHandler } = require("../auth");
 
@@ -13,11 +14,9 @@ const SEATS_PER_ROW = 6;
 
 const generateSeatDocuments = (flightId, totalSeats) => {
 	const seats = [];
-
 	for (let i = 0; i < totalSeats; i++) {
 		const row = Math.floor(i / SEATS_PER_ROW) + 1;
 		const col = COLUMNS[i % SEATS_PER_ROW];
-
 		seats.push({
 			flightId,
 			seatNumber: `${row}${col}`,
@@ -26,10 +25,8 @@ const generateSeatDocuments = (flightId, totalSeats) => {
 			isActive: true
 		});
 	}
-
 	return seats;
 };
-
 
 // ============================================================
 // USER LEVEL ACCESS ACTIONS
@@ -58,7 +55,6 @@ module.exports.searchFlights = (req, res) => {
 		originQuery.push({ originAirportId: req.query.originAirportId });
 		originQuery.push({ originAirportId: new RegExp(`^${req.query.originAirportId}$`, 'i') });
 		if (req.query.originAirportId.match(/^[0-9a-fA-F]{24}$/)) {
-			// FIXED: Removed inline 'require' statement and used the top-level mongoose variable natively
 			originQuery.push({ originAirportId: new mongoose.Types.ObjectId(req.query.originAirportId) });
 		}
 	}
@@ -67,11 +63,9 @@ module.exports.searchFlights = (req, res) => {
 		destQuery.push({ destinationAirportId: req.query.destinationAirportId });
 		destQuery.push({ destinationAirportId: new RegExp(`^${req.query.destinationAirportId}$`, 'i') });
 		if (req.query.destinationAirportId.match(/^[0-9a-fA-F]{24}$/)) {
-			// FIXED: Removed inline 'require' statement and used the top-level mongoose variable natively
 			destQuery.push({ destinationAirportId: new mongoose.Types.ObjectId(req.query.destinationAirportId) });
 		}
 	}
-
 
 	return Flight.find({
 		$and: [
