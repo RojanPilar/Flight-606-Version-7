@@ -1,5 +1,60 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import {
+  getMyBookingsUser,
+  getMyBookingsGuest,
+  cancelBookingUser,
+  cancelBookingGuest,
+  rescheduleBookingUser,
+  searchFlights,
+  getPassengersByBooking,
+  getSeatById,
+  getMyPassengers,
+  getPassengerById,
+  getSeatsByFlight,
+  getFlightById,        
+} from '../api.js';
+
+// ── UTILITY ACTION FOR ENRICHING BOOKING DATA ────────────────────────
+// This utility fixes the "DEP"/"ARR" placeholder issues and missing ID errors 
+// by pulling missing deep properties from your backend.
+async function enrichBooking(b, passengerMap = new Map()) {
+  // Self-heal an unpopulated/shallow flightId
+  try {
+    const flightRef = b.flightId
+    const flightId   = (flightRef && typeof flightRef === 'object') ? flightRef._id : flightRef
+    const isPopulated = !!(flightRef && typeof flightRef === 'object' && flightRef.departureTime)
+
+    if (flightId && !isPopulated) {
+      const fRes  = await getFlightById(flightId)
+      const flight = fRes?.result || fRes?.flight || fRes
+      if (flight) b.flightId = flight
+    }
+  } catch {
+    // leave b.flightId as-is; template falls back to 'DEP'/'ARR'/'—'
+  }
+
+  try {
+    const bkpRes = await getPassengersByBooking(b._id)
+    const bkp    = bkpRes?.result?.find(r => r.isActive) ?? bkpRes?.result?.[0]
+    if (!bkp) return b
+    b.ticketNumber = bkp.ticketNumber ?? null
+    const passengerId = bkp.passengerId?._id
+      ? String(bkp.passengerId._id)
+      : bkp.passengerId ? String(bkp.passengerId) : null
+    if (passengerId) {
+      let passenger = passengerMap.get(passengerId) ?? null
+      if (!passenger) {
+        try { const pRes = await getPassengerById(passengerId); passenger = pRes?.result ?? null } catch {}
+      }
+      if (passenger) b.passengerName = [passenger.firstName, passenger.lastName].filter(Boolean).join(' ') || null
+    }
+    if (bkp.seatId) {
+      try { const seatRes = await getSeatById(bkp.seatId); b.seat = seatRes?.result ?? null } catch { b.seat = null }
+    }
+  } catch {}
+  return b
+}
 
 // Holds the in-progress checkout funnel: Search -> Book (seats + passengers)
 // -> Confirm & Pay -> Success. Nothing here is persisted to localStorage on
@@ -9,6 +64,11 @@ export const useBookingStore = defineStore('booking', () => {
     const mode = ref('guest');        // 'user' | 'guest'
     const guestEmail = ref('');
     const paxCount = ref(1);
+    
+    // Rebooking state variables
+    const selectedSeatId = ref('');
+    const rebookOriginId = ref('');   
+    const rebookDestId = ref('');     
 
     // One entry per flight leg (1 for one-way, 2 for round-trip).
     // Each entry: { flightId, flight, seats, selectedSeatIds: [ids, one per passenger] }
@@ -115,6 +175,9 @@ export const useBookingStore = defineStore('booking', () => {
         legs,
         passengers,
         lastOrder,
+        selectedSeatId,   
+        rebookOriginId,   
+        rebookDestId,     
         startFunnel,
         setPaxCount,
         setSeatsForLeg,
