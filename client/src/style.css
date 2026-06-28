@@ -2778,3 +2778,279 @@ h1, h2, h3, h4, h5, h6 {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* ════════════════════════════════════════════════════
+   TICKET CARD — Premium Boarding-Pass Stub
+   Paste this entire block onto the END of index.css.
+   Nothing needs to be deleted: every selector below is
+   the same specificity as your existing rule of the same
+   name, and CSS gives later source order the win — so
+   these simply take over from the originals. The .fc-*
+   selectors not listed here (.fc-badge, .fc-airport,
+   .fc-time, .fc-select-btn, etc.) are untouched and keep
+   working exactly as before, including on other pages
+   that reuse .flight-card (e.g. search results).
+════════════════════════════════════════════════════ */
+
+/* ── Flight track (center column) — fixes wrapping + recenters the medallion ── */
+.fc-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 130px;
+  padding: 0 8px;
+}
+
+.fc-duration {
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap; /* "3h 0m" no longer wraps under cramped widths */
+}
+
+.fc-line {
+  width: 100%;
+  height: 1px;
+  /* thin gold line that fades at both ends instead of a hard-edged bar */
+  background: linear-gradient(to right, transparent, var(--gold) 18%, var(--gold) 82%, transparent);
+  position: relative;
+  margin: 4px 0;
+}
+
+.fc-plane-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-60-mid);
+  color: var(--gold);
+  font-size: 0.7rem;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Selected card — medallion picks up the gold-tinted surface instead of trying to "cut out" a background color (that hack didn't survive the glass/translucent card backgrounds) */
+.flight-card.selected .fc-plane-icon {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+}
+
+.fc-stops {
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ── Price / status column — now a real flex stack, no more inline-style overrides fighting the type scale ── */
+.fc-price-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 168px;
+}
+
+.fc-static { cursor: default; }
+
+/* ── Luxury pill action buttons ── */
+.fc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.fc-action-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 9px 0;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.fc-action-btn--primary {
+  background: var(--gold);
+  color: var(--ink-on-gold);
+}
+.fc-action-btn--primary:hover { background: var(--gold-light); transform: translateY(-1px); }
+
+.fc-action-btn--ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--gold);
+}
+.fc-action-btn--ghost:hover { background: var(--gold-dim); border-color: var(--gold); }
+
+.fc-action-btn--danger {
+  background: transparent;
+  border-color: rgba(255, 77, 77, 0.35);
+  color: var(--error);
+}
+.fc-action-btn--danger:hover { background: rgba(255, 77, 77, 0.08); border-color: var(--error); }
+.fc-action-btn--danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+[data-theme="light"] .fc-action-btn--danger:hover { background: rgba(217, 56, 58, 0.08); }
+
+/* ── Boarding-pass stub: spans the FULL card width ──
+   This is the actual fix for the "overlapping/clipping" bug:
+   .flight-card is `display:grid; grid-template-columns: 1fr auto 1fr auto;`
+   with no row defined. A 5th child (this stub) without an explicit
+   grid-column was auto-placed into column 1 only — squeezing the
+   entire details block into a quarter of the card's width, which is
+   why "Ticket No." ran into "Departure Terminal". grid-column: 1 / -1
+   makes it span every column track, full bleed, every time. */
+.fc-stub {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+/* Perforated tear-line with punched side notches, like a real ticket stub.
+   Bleeds to the card's true edge (negative margin = card's own padding)
+   and the notches sit half-in/half-out, filled with the page background
+   so they read as actual cut-outs rather than decoration. */
+.fc-stub-divider {
+  position: relative;
+  height: 1px;
+  margin: 22px -28px;
+  background-image: repeating-linear-gradient(to right, var(--border) 0 7px, transparent 7px 14px);
+}
+
+.fc-stub-divider::before,
+.fc-stub-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-60);
+  transform: translateY(-50%);
+}
+
+.fc-stub-divider::before { left: -11px; }
+.fc-stub-divider::after  { right: -11px; }
+
+/* ── Ticket meta grid — explicit 3-column layout, never improvises a width ── */
+.fc-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px 28px;
+}
+
+.fc-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0; /* grid items default to min-width:auto — this is what lets ellipsis actually trigger instead of stretching the column */
+}
+
+.fc-meta-label {
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.fc-meta-value {
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fc-meta-value--mono {
+  letter-spacing: 0.06em;
+}
+
+.fc-meta-value-sub {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  white-space: normal;
+}
+
+.fc-seat-class {
+  font-size: 0.62rem;
+  text-transform: capitalize;
+  letter-spacing: 0.04em;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+
+/* ── Departure → Arrival timebar ── */
+.fc-timebar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.fc-timebar-block { display: flex; flex-direction: column; gap: 4px; }
+
+.fc-timebar-time {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.fc-timebar-time--gold { color: var(--gold); }
+
+.fc-timebar-date {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.fc-timebar-arrow {
+  color: var(--gold);
+  font-size: 1.1rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 767px) {
+  .fc-price-box { align-items: flex-start; }
+  .fc-meta-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 576px) {
+  .fc-meta-grid { grid-template-columns: 1fr; }
+  .fc-timebar { flex-wrap: wrap; row-gap: 12px; }
+}

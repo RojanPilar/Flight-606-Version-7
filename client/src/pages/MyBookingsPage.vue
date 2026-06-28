@@ -230,7 +230,7 @@ onMounted(async () => {
             <RouterLink :to="{ name: 'SearchFlights' }" class="gold-link">Search for a flight →</RouterLink>
           </div>
 
-          <div v-for="booking in bookings" :key="booking._id" class="flight-card mb-3" style="cursor:default; flex-wrap: wrap;">
+          <div v-for="booking in bookings" :key="booking._id" class="flight-card fc-static mb-3">
 
             <!-- Origin -->
             <div class="fc-endpoint">
@@ -242,7 +242,7 @@ onMounted(async () => {
               <div class="fc-date">{{ formatDateLabel(booking.flight?.departureTime) }}</div>
             </div>
 
-            <!-- Mid -->
+            <!-- Mid: flight track -->
             <div class="fc-mid">
               <div class="fc-duration">{{ calcTravelTime(booking.flight?.departureTime, booking.flight?.arrivalTime) }}</div>
               <div class="fc-line"><span class="fc-plane-icon"><i class="bi bi-airplane-fill"></i></span></div>
@@ -260,21 +260,16 @@ onMounted(async () => {
             </div>
 
             <!-- Price / Status / Actions -->
-            <div class="fc-price-box d-flex flex-column align-items-stretch justify-content-start text-end" style="min-width: 160px; gap: 4px;">
-              <div>
-                <span :class="statusBadgeClass(booking.status)">{{ booking.status }}</span>
-              </div>
-              <div class="fc-price-amt mt-1" style="font-size:1.2rem; font-weight:700;">
-                ₱{{ booking.totalAmount?.toLocaleString() ?? '—' }}
-              </div>
-              <div class="fc-price-note text-muted" style="font-size:0.75rem;">Ref: {{ booking.bookingReference }}</div>
+            <div class="fc-price-box">
+              <span :class="statusBadgeClass(booking.status)">{{ booking.status }}</span>
+              <div class="fc-price-amt">₱{{ booking.totalAmount?.toLocaleString() ?? '—' }}</div>
+              <div class="fc-price-note">Ref: {{ booking.bookingReference }}</div>
 
-              <div class="d-flex flex-column gap-2 mt-2 w-100">
+              <div class="fc-actions">
                 <RouterLink
                   v-if="booking.status === 'confirmed' && !booking.checkedIn && isUpcoming(booking)"
                   :to="{ name: 'CheckIn', query: { ref: booking.bookingReference } }"
-                  class="fc-select-btn d-block text-center text-decoration-none w-100"
-                  style="padding: 6px 0;"
+                  class="fc-action-btn fc-action-btn--primary"
                 >Check-in</RouterLink>
 
                 <RouterLink
@@ -289,82 +284,76 @@ onMounted(async () => {
                         : undefined
                     }
                   }"
-                  class="fc-select-btn d-block text-center text-decoration-none w-100"
-                  style="padding: 6px 0;"
+                  class="fc-action-btn fc-action-btn--ghost"
                 >Rebook</RouterLink>
 
                 <button
                   v-if="booking.status !== 'cancelled' && !booking.checkedIn"
-                  class="fc-select-btn d-block w-100"
-                  style="background:transparent; color:#ff4d4d; border:1px solid #ff4d4d; padding:6px 0;"
+                  class="fc-action-btn fc-action-btn--danger"
                   :disabled="cancellingRef === booking.bookingReference"
                   @click="cancelBooking(booking)"
                 >{{ cancellingRef === booking.bookingReference ? 'Cancelling…' : 'Cancel' }}</button>
               </div>
             </div>
 
-            <!-- Expanded booking details — two-row grid matching reference design -->
-            <div class="w-100 px-3 pb-3 pt-3" style="border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem;">
+            <!-- Boarding-pass stub: perforated tear line + ticket meta -->
+            <div class="fc-stub">
+              <div class="fc-stub-divider"></div>
 
-              <!-- Row 1: Flight · Passenger · Seat · Ticket No. · Terminals -->
-              <div class="row g-3 mb-3">
-                <div class="col-6 col-md-4">
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Flight</div>
-                  <div class="fw-semibold">
+              <div class="fc-meta-grid">
+                <div class="fc-meta-item">
+                  <span class="fc-meta-label">Flight</span>
+                  <span class="fc-meta-value">
                     {{ booking.flight?.flightNumber || '—' }}
-                    <span v-if="booking.flight?.airlineId?.name" style="opacity:0.65;">· {{ booking.flight.airlineId.name }}</span>
-                  </div>
+                    <span v-if="booking.flight?.airlineId?.name" class="fc-meta-value-sub">{{ booking.flight.airlineId.name }}</span>
+                  </span>
                 </div>
 
-                <div class="col-6 col-md-4">
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Passenger</div>
-                  <div class="fw-semibold">{{ passengerName(booking.passenger) }}</div>
+                <div class="fc-meta-item">
+                  <span class="fc-meta-label">Passenger</span>
+                  <span class="fc-meta-value">{{ passengerName(booking.passenger) }}</span>
                 </div>
 
-                <div class="col-6 col-md-4">
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Seat</div>
-                  <div class="fw-semibold">
-                    <span v-if="booking.seat">
+                <div class="fc-meta-item">
+                  <span class="fc-meta-label">Seat</span>
+                  <span class="fc-meta-value">
+                    <template v-if="booking.seat">
                       {{ booking.seat.seatNumber }}
-                      <span class="badge ms-1" :class="seatClassBadge(booking.seat.class)" style="font-size:0.7rem; text-transform:capitalize;">
-                        {{ booking.seat.class }}
-                      </span>
-                    </span>
-                    <span v-else>—</span>
-                  </div>
+                      <span class="badge fc-seat-class" :class="seatClassBadge(booking.seat.class)">{{ booking.seat.class }}</span>
+                    </template>
+                    <template v-else>—</template>
+                  </span>
                 </div>
 
-                <div class="col-6 col-md-4">
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Ticket No.</div>
-                  <div class="font-monospace fw-semibold">{{ booking.ticketNumber || '—' }}</div>
+                <div class="fc-meta-item">
+                  <span class="fc-meta-label">Ticket No.</span>
+                  <span class="fc-meta-value fc-meta-value--mono font-monospace">{{ booking.ticketNumber || '—' }}</span>
                 </div>
 
-                <div class="col-6 col-md-4">
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Departure Terminal</div>
-                  <div class="fw-semibold">{{ booking.flight?.originTerminal ? 'Terminal T' + booking.flight.originTerminal : '—' }}</div>
+                <div class="fc-meta-item">
+                  <span class="fc-meta-label">Departure Terminal</span>
+                  <span class="fc-meta-value">{{ booking.flight?.originTerminal ? 'Terminal T' + booking.flight.originTerminal : '—' }}</span>
                 </div>
 
-                <div class="col-6 col-md-4">
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Arrival Terminal</div>
-                  <div class="fw-semibold">{{ booking.flight?.destinationTerminal ? 'Terminal T' + booking.flight.destinationTerminal : '—' }}</div>
+                <div class="fc-meta-item">
+                  <span class="fc-meta-label">Arrival Terminal</span>
+                  <span class="fc-meta-value">{{ booking.flight?.destinationTerminal ? 'Terminal T' + booking.flight.destinationTerminal : '—' }}</span>
                 </div>
               </div>
 
-              <!-- Row 2: Departure → Arrival time/date bar -->
-              <div class="d-flex align-items-center gap-3 pt-2" style="border-top: 1px solid rgba(255,255,255,0.06);">
-                <div>
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Departure</div>
-                  <div class="fw-bold" style="font-size:1.1rem;">{{ formatTime(booking.flight?.departureTime) }}</div>
-                  <div style="opacity:0.6; font-size:0.75rem;">{{ formatDateLabel(booking.flight?.departureTime) }}</div>
+              <div class="fc-timebar">
+                <div class="fc-timebar-block">
+                  <span class="fc-meta-label">Departure</span>
+                  <div class="fc-timebar-time">{{ formatTime(booking.flight?.departureTime) }}</div>
+                  <div class="fc-timebar-date">{{ formatDateLabel(booking.flight?.departureTime) }}</div>
                 </div>
-                <div style="opacity:0.5; font-size:1.2rem; padding: 0 4px;">→</div>
-                <div>
-                  <div style="opacity:0.55; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.05em;">Arrival</div>
-                  <div class="fw-bold" style="font-size:1.1rem; color: var(--gold, #c9a84c);">{{ formatTime(booking.flight?.arrivalTime) }}</div>
-                  <div style="opacity:0.6; font-size:0.75rem;">{{ formatDateLabel(booking.flight?.arrivalTime) }}</div>
+                <div class="fc-timebar-arrow">→</div>
+                <div class="fc-timebar-block">
+                  <span class="fc-meta-label">Arrival</span>
+                  <div class="fc-timebar-time fc-timebar-time--gold">{{ formatTime(booking.flight?.arrivalTime) }}</div>
+                  <div class="fc-timebar-date">{{ formatDateLabel(booking.flight?.arrivalTime) }}</div>
                 </div>
               </div>
-
             </div>
 
           </div>
