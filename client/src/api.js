@@ -1,10 +1,11 @@
 import axios from "axios";
 
 const api = axios.create({
-    // Live Render backend address
-    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://onrender.com",
+    // 1. Clean up potential missing trailing slashes dynamically
+    // Updated fallback to use your new active testing URL
+    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://flight-606-version-7.onrender.com",
     
-    // Enable credentials to allow cookie/session tracking if needed
+    // 2. Enable credentials to allow cookie/session tracking if needed
     withCredentials: true 
 });
 
@@ -15,7 +16,7 @@ api.interceptors.request.use((config) => {
         config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Prevent malformed URLs by making sure relative paths start with a slash
+    // 3. Prevent malformed URLs by making sure relative paths start with a slash
     if (config.url && !config.url.startsWith('/') && !config.url.startsWith('http')) {
         config.url = `/${config.url}`;
     }
@@ -247,31 +248,56 @@ export async function reactivateSeat(id) {
 
 
 // ============================================================
-// PASSENGER RESOURCE (RESTORED MISSING EXPORTS)
+// PASSENGER RESOURCE
 // ============================================================
 
-export async function createPassenger(data) {
-    const { data: res } = await api.post("/passengers/create-passenger", data);
-    return res;
-}
+// --- User: Passenger Management (Authenticated) ---
 export async function createPassengerUser(data) {
-    const { data: res } = await api.post("/passengers/create-passenger-user", data);
+    const { data: res } = await api.post("/passengers/user/create-passenger", data);
     return res;
 }
+export async function getMyPassengers() {
+    const { data: res } = await api.get("/passengers/user/my-passengers");
+    return res;
+}
+export async function updatePassenger(id, data) {
+    const { data: res } = await api.patch(`/passengers/user/update-passenger/${id}`, data);
+    return res;
+}
+
+// --- Guest: Passenger Management (Public) ---
 export async function createPassengerGuest(data) {
-    const { data: res } = await api.post("/passengers/create-passenger-guest", data);
+    const { data: res } = await api.post("/passengers/guest/create-passenger", data);
+    return res;
+}
+export async function getPassengerForGuest(data) {
+    const { data: res } = await api.post("/passengers/guest/get-passenger", data);
+    return res;
+}
+export async function updatePassengerAsGuest(data) {
+    const { data: res } = await api.patch("/passengers/guest/update-passenger", data);
+    return res;
+}
+
+// --- Admin: Passenger Management ---
+export async function getAllPassengers() {
+    const { data: res } = await api.get("/passengers/get-all-passengers");
     return res;
 }
 export async function getPassengerById(id) {
     const { data: res } = await api.get(`/passengers/get-passenger/${id}`);
     return res;
 }
-export async function getMyPassengers() {
-    const { data: res } = await api.get("/passengers/get-my-passengers");
+export async function adminUpdatePassenger(id, data) {
+    const { data: res } = await api.put(`/passengers/admin-update-passenger/${id}`, data);
     return res;
 }
-export async function getPassengerForGuest(params) {
-    const { data: res } = await api.get("/passengers/guest-passenger", { params });
+export async function activatePassenger(id) {
+    const { data: res } = await api.patch(`/passengers/activate-passenger/${id}`);
+    return res;
+}
+export async function deactivatePassenger(id) {
+    const { data: res } = await api.patch(`/passengers/deactivate-passenger/${id}`);
     return res;
 }
 
@@ -280,37 +306,241 @@ export async function getPassengerForGuest(params) {
 // BOOKING RESOURCE
 // ============================================================
 
+// --- User: Booking Actions (Authenticated) ---
 export async function createBookingUser(data) {
-    const { data: res } = await api.post("/bookings/create-booking", data);
+    const { data: res } = await api.post("/bookings/user/create-booking", data);
     return res;
 }
-
-export async function createBookingGuest(data) {
-    const { data: res } = await api.post("/bookings/create-guest-booking", data);
-    return res;
-}
-
 export async function getMyBookingsUser() {
-    const { data: res } = await api.get("/bookings/my-bookings");
+    const { data: res } = await api.get("/bookings/user/my-bookings");
     return res;
 }
 
-export async function getMyBookingsGuest(params) {
-    const { data: res } = await api.get("/bookings/guest-bookings", { params });
+export async function rescheduleBookingUser(id, data) {
+    const { data: res } = await api.patch(`/bookings/user/update-booking/${id}`, data);
     return res;
 }
-
 export async function cancelBookingUser(bookingReference) {
-    const { data: res } = await api.patch(`/bookings/cancel/${bookingReference}`);
+    const { data: res } = await api.patch(`/bookings/user/cancel-booking/${bookingReference}`);
+    return res;
+}
+export async function checkInBookingUser(bookingReference) {
+    const { data: res } = await api.patch(`/bookings/user/check-in/${bookingReference}`);
     return res;
 }
 
+// --- Guest: Booking Actions (Public) ---
+export async function createBookingGuest(data) {
+    const { data: res } = await api.post("/bookings/guest/create-booking", data);
+    return res;
+}
+export async function getMyBookingsGuest(data) {
+    const { data: res } = await api.post("/bookings/guest/my-bookings", data);
+    return res;
+}
 export async function cancelBookingGuest(bookingReference, data) {
-    const { data: res } = await api.patch(/bookings/cancel-guest/${bookingReference}, data);return res;
+    const { data: res } = await api.patch(`/bookings/guest/cancel-booking/${bookingReference}`, data);
+    return res;
+}
+export async function checkInBookingGuest(bookingReference, data) {
+    const { data: res } = await api.patch(`/bookings/guest/check-in/${bookingReference}`, data);
+    return res;
 }
 
-export async function rescheduleBookingUser(bookingReference, data) {const { data: res } = await api.patch(/bookings/reschedule/${bookingReference}, data);return res;
+export async function secureGuestLookup(data) {
+    const { data: res } = await api.post("/bookings/guest/secure-lookup", data);
+    return res;
 }
 
-export async function getPassengersByBooking(bookingId) {const { data: res } = await api.get(/bookingpassengers/booking/${bookingId});return res;
+// --- Public ---
+export async function getBookingByReference(bookingReference) {
+    const { data: res } = await api.get(`/bookings/get-booking/${bookingReference}`);
+    return res;
 }
+
+// --- Admin: Booking Management ---
+export async function getAllBookings() {
+    const { data: res } = await api.get("/bookings/get-all-bookings");
+    return res;
+}
+export async function updateBooking(id, data) {
+    const { data: res } = await api.patch(`/bookings/update-booking/${id}`, data);
+    return res;
+}
+export async function updateBookingStatus(id, data) {
+    const { data: res } = await api.patch(`/bookings/update-booking-status/${id}`, data);
+    return res;
+}
+export async function deactivateBooking(id) {
+    const { data: res } = await api.patch(`/bookings/deactivate-booking/${id}`);
+    return res;
+}
+export async function reactivateBooking(id) {
+    const { data: res } = await api.patch(`/bookings/reactivate-booking/${id}`);
+    return res;
+}
+
+
+// ============================================================
+// BOOKING PASSENGER RESOURCE
+// ============================================================
+
+// --- User: Booking Passenger Actions (Authenticated) ---
+export async function createBookingPassenger(data) {
+    const { data: res } = await api.post("/bookingpassengers/create-booking-passenger", data);
+    return res;
+}
+
+export async function createBookingPassengerGuest(data) {
+       const { data: res } = await api.post("/bookingpassengers/guest/create-booking-passenger",
+           data
+       );
+       return res;
+}
+
+// --- Public ---
+export async function getPassengersByBooking(bookingId) {
+    const { data: res } = await api.get(`/bookingpassengers/get-booking-passengers/${bookingId}`);
+    return res;
+}
+
+// --- Admin: Booking Passenger Management ---
+export async function getAllBookingPassengers() {
+    const { data: res } = await api.get("/bookingpassengers/get-all-booking-passengers");
+    return res;
+}
+export async function deactivateBookingPassenger(id) {
+    const { data: res } = await api.patch(`/bookingpassengers/deactivate-booking-passenger/${id}`);
+    return res;
+}
+export async function reactivateBookingPassenger(id) {
+    const { data: res } = await api.patch(`/bookingpassengers/reactivate-booking-passenger/${id}`);
+    return res;
+}
+
+
+// ============================================================
+// PAYMENT RESOURCE
+// ============================================================
+
+// --- User: Payment Actions (Authenticated) ---
+export async function createPaymentUser(data) {
+    const { data: res } = await api.post("/payments/user/create-payment", data);
+    return res;
+}
+export async function getMyPaymentsUser() {
+    const { data: res } = await api.get("/payments/user/my-payments");
+    return res;
+}
+
+// --- Guest: Payment Actions (Public) ---
+export async function createPaymentGuest(data) {
+    const { data: res } = await api.post("/payments/guest/create-payment", data);
+    return res;
+}
+export async function getMyPaymentsGuest(data) {
+    const { data: res } = await api.post("/payments/guest/my-payments", data);
+    return res;
+}
+
+// --- Admin: Payment Management ---
+export async function getAllPayments() {
+    const { data: res } = await api.get("/payments/get-all-payments");
+    return res;
+}
+export async function getPaymentById(id) {
+    const { data: res } = await api.get(`/payments/get-payment/${id}`);
+    return res;
+}
+export async function updatePaymentStatus(id, data) {
+    const { data: res } = await api.patch(`/payments/update-payment-status/${id}`, data);
+    return res;
+}
+
+
+// ============================================================
+// ITINERARY RESOURCE
+// ============================================================
+
+// --- User: Itinerary Actions (Authenticated) ---
+export async function createItineraryUser(data) {
+    const { data: res } = await api.post("/itineraries/create-itinerary", data);
+    return res;
+}
+export async function getMyItinerariesUser() {
+    const { data: res } = await api.get("/itineraries/my-itineraries");
+    return res;
+}
+export async function getItineraryById(id) {
+    const { data: res } = await api.get(`/itineraries/get-itinerary/${id}`);
+    return res;
+}
+export async function addBookingToItinerary(id, data) {
+    const { data: res } = await api.patch(`/itineraries/add-booking/${id}`, data);
+    return res;
+}
+export async function removeBookingFromItinerary(id, data) {
+    const { data: res } = await api.patch(`/itineraries/remove-booking/${id}`, data);
+    return res;
+}
+
+// --- Guest: Itinerary Actions (Public) ---
+export async function createItineraryGuest(data) {
+    const { data: res } = await api.post("/itineraries/create-itinerary-guest", data);
+    return res;
+}
+export async function getMyItinerariesGuest(data) {
+    const { data: res } = await api.post("/itineraries/my-itineraries-guest", data);
+    return res;
+}
+
+// --- Admin: Itinerary Management ---
+export async function getAllItineraries() {
+    const { data: res } = await api.get("/itineraries/get-all-itineraries");
+    return res;
+}
+export async function deactivateItinerary(id) {
+    const { data: res } = await api.patch(`/itineraries/deactivate-itinerary/${id}`);
+    return res;
+}
+export async function reactivateItinerary(id) {
+    const { data: res } = await api.patch(`/itineraries/reactivate-itinerary/${id}`);
+    return res;
+}
+
+
+// ============================================================
+// NOTIFICATION RESOURCE
+// ============================================================
+
+// --- User: Notification Actions (Authenticated) ---
+export async function getMyNotificationsUser() {
+    const { data: res } = await api.get("/notifications/my-notifications");
+    return res;
+}
+export async function markAsRead(id) {
+    const { data: res } = await api.patch(`/notifications/mark-as-read/${id}`);
+    return res;
+}
+export async function markAllAsRead() {
+    const { data: res } = await api.patch("/notifications/mark-all-as-read");
+    return res;
+}
+
+// --- Guest: Notification Actions (Public) ---
+export async function getMyNotificationsGuest(data) {
+    const { data: res } = await api.post("/notifications/my-notifications-guest", data);
+    return res;
+}
+
+// --- Admin: Notification Management ---
+export async function getAllNotifications() {
+    const { data: res } = await api.get("/notifications/get-all-notifications");
+    return res;
+}
+export async function deactivateNotification(id) {
+    const { data: res } = await api.patch(`/notifications/deactivate-notification/${id}`);
+    return res;
+}
+
+export default api;
