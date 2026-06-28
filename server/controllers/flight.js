@@ -58,7 +58,7 @@ module.exports.searchFlights = (req, res) => {
 		originQuery.push({ originAirportId: req.query.originAirportId });
 		originQuery.push({ originAirportId: new RegExp(`^${req.query.originAirportId}$`, 'i') });
 		if (req.query.originAirportId.match(/^[0-9a-fA-F]{24}$/)) {
-			// FIXED: Cleared out 'new require()' syntax to call our variable natively
+			// FIXED: Removed inline 'require' statement and used the top-level mongoose variable natively
 			originQuery.push({ originAirportId: new mongoose.Types.ObjectId(req.query.originAirportId) });
 		}
 	}
@@ -67,7 +67,7 @@ module.exports.searchFlights = (req, res) => {
 		destQuery.push({ destinationAirportId: req.query.destinationAirportId });
 		destQuery.push({ destinationAirportId: new RegExp(`^${req.query.destinationAirportId}$`, 'i') });
 		if (req.query.destinationAirportId.match(/^[0-9a-fA-F]{24}$/)) {
-			// FIXED: Cleared out 'new require()' syntax to call our variable natively
+			// FIXED: Removed inline 'require' statement and used the top-level mongoose variable natively
 			destQuery.push({ destinationAirportId: new mongoose.Types.ObjectId(req.query.destinationAirportId) });
 		}
 	}
