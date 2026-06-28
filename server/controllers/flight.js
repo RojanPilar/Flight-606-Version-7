@@ -7,8 +7,6 @@ const Seat = require("../models/Seat");
 const { createNotification } = require("./notification");
 const { errorHandler } = require("../auth");
 
-
-
 const COLUMNS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const BUSINESS_ROWS = 2;
 const SEATS_PER_ROW = 6;
@@ -33,7 +31,9 @@ const generateSeatDocuments = (flightId, totalSeats) => {
 };
 
 
-// USER LEVEL ACCESS
+// ============================================================
+// USER LEVEL ACCESS ACTIONS
+// ============================================================
 
 module.exports.searchFlights = (req, res) => {
 	if (!req.query.originAirportId) {
@@ -51,12 +51,32 @@ module.exports.searchFlights = (req, res) => {
 	const endOfDay = new Date(req.query.departureDate);
 	endOfDay.setUTCHours(23, 59, 59, 999);
 
+	const originQuery = [];
+	const destQuery = [];
+
+	if (typeof req.query.originAirportId === 'string') {
+		originQuery.push({ originAirportId: req.query.originAirportId });
+		originQuery.push({ originAirportId: new RegExp(`^${req.query.originAirportId}$`, 'i') });
+		if (req.query.originAirportId.match(/^[0-9a-fA-F]{24}$/)) {
+			originQuery.push({ originAirportId: new require('mongoose').Types.ObjectId(req.query.originAirportId) });
+		}
+	}
+
+	if (typeof req.query.destinationAirportId === 'string') {
+		destQuery.push({ destinationAirportId: req.query.destinationAirportId });
+		destQuery.push({ destinationAirportId: new RegExp(`^${req.query.destinationAirportId}$`, 'i') });
+		if (req.query.destinationAirportId.match(/^[0-9a-fA-F]{24}$/)) {
+			destQuery.push({ destinationAirportId: new require('mongoose').Types.ObjectId(req.query.destinationAirportId) });
+		}
+	}
+
 	return Flight.find({
-		originAirportId: req.query.originAirportId,
-		destinationAirportId: req.query.destinationAirportId,
-		departureTime: { $gte: startOfDay, $lte: endOfDay },
-		isActive: true,
-		status: "scheduled"
+		$and: [
+			{ $or: originQuery },
+			{ $or: destQuery },
+			{ departureTime: { $gte: startOfDay, $lte: endOfDay } },
+			{ status: { $in: ["scheduled", "on-time", "delayed"] } }
+		]
 	})
 	.then(result => {
 		if (result.length === 0) {
@@ -72,8 +92,7 @@ module.exports.searchFlights = (req, res) => {
 
 module.exports.getFlightById = (req, res) => {
 	return Flight.findOne({
-		_id: req.params.id,
-		isActive: true
+		_id: req.params.id
 	})
 	.then(result => {
 		if (!result) {
@@ -87,84 +106,50 @@ module.exports.getFlightById = (req, res) => {
 	.catch(err => errorHandler(err, req, res));
 };
 
-
-// ADMIN LEVEL ACCESS
+// ============================================================
+// ADMIN LEVEL ACCESS ACTIONS
+// ============================================================
 
 module.exports.createFlight = (req, res) => {
 	const { airlineId, aircraftId, originAirportId, destinationAirportId, flightNumber, departureTime, arrivalTime, basePrice, businessPrice, originTerminal, destinationTerminal } = req.body;
 
-	if (!airlineId) {
-		return res.status(400).send({ message: "Airline ID required" });
-	}
-	if (!aircraftId) {
-		return res.status(400).send({ message: "Aircraft ID required" });
-	}
-	if (!originAirportId) {
-		return res.status(400).send({ message: "Origin Airport ID required" });
-	}
-	if (!destinationAirportId) {
-		return res.status(400).send({ message: "Destination Airport ID required" });
-	}
-	if (!flightNumber) {
-		return res.status(400).send({ message: "Flight number required" });
-	}
-	if (!departureTime) {
-		return res.status(400).send({ message: "Departure Time required" });
-	}
-	if (!arrivalTime) {
-		return res.status(400).send({ message: "Arrival Time required" });
-	}
-	if (basePrice === undefined || basePrice === null) {
-		return res.status(400).send({ message: "Economy price (basePrice) required" });
-	}
-	if (businessPrice === undefined || businessPrice === null) {
-		return res.status(400).send({ message: "Business class price (businessPrice) required" });
-	}
+	if (!airlineId) return res.status(400).send({ message: "Airline ID required" });
+	if (!aircraftId) return res.status(400).send({ message: "Aircraft ID required" });
+	if (!originAirportId) return res.status(400).send({ message: "Origin Airport ID required" });
+	if (!destinationAirportId) return res.status(400).send({ message: "Destination Airport ID required" });
+	if (!flightNumber) return res.status(400).send({ message: "Flight number required" });
+	if (!departureTime) return res.status(400).send({ message: "Departure Time required" });
+	if (!arrivalTime) return res.status(400).send({ message: "Arrival Time required" });
+	if (basePrice === undefined || basePrice === null) return res.status(400).send({ message: "Economy price (basePrice) required" });
+	if (businessPrice === undefined || businessPrice === null) return res.status(400).send({ message: "Business class price (businessPrice) required" });
+	
 	if (businessPrice <= basePrice) {
 		return res.status(400).send({ message: "Business class price must be greater than economy price" });
 	}
 
 	return Airline.findById(airlineId)
 		.then(airline => {
-			if (!airline) {
-				return res.status(404).send({ message: "Airline not found" });
-			}
-			if (!airline.isActive) {
-				return res.status(400).send({ message: "Cannot assign an inactive airline" });
-			}
+			if (!airline) return res.status(404).send({ message: "Airline not found" });
+			if (!airline.isActive) return res.status(400).send({ message: "Cannot assign an inactive airline" });
 
 			return Aircraft.findById(aircraftId)
 				.then(aircraft => {
-					if (!aircraft) {
-						return res.status(404).send({ message: "Aircraft not found" });
-					}
-					if (!aircraft.isActive) {
-						return res.status(400).send({ message: "Cannot assign an inactive aircraft" });
-					}
+					if (!aircraft) return res.status(404).send({ message: "Aircraft not found" });
+					if (!aircraft.isActive) return res.status(400).send({ message: "Cannot assign an inactive aircraft" });
 
 					return Airport.findById(originAirportId)
 						.then(originAirport => {
-							if (!originAirport) {
-								return res.status(404).send({ message: "Origin airport not found" });
-							}
-							if (!originAirport.isActive) {
-								return res.status(400).send({ message: "Origin airport is inactive" });
-							}
+							if (!originAirport) return res.status(404).send({ message: "Origin airport not found" });
+							if (!originAirport.isActive) return res.status(400).send({ message: "Origin airport is inactive" });
 
 							return Airport.findById(destinationAirportId)
 								.then(destinationAirport => {
-									if (!destinationAirport) {
-										return res.status(404).send({ message: "Destination airport not found" });
-									}
-									if (!destinationAirport.isActive) {
-										return res.status(400).send({ message: "Destination airport is inactive" });
-									}
+									if (!destinationAirport) return res.status(404).send({ message: "Destination airport not found" });
+									if (!destinationAirport.isActive) return res.status(400).send({ message: "Destination airport is inactive" });
 
 									return Flight.findOne({ flightNumber })
 										.then(existingFlight => {
-											if (existingFlight) {
-												return res.status(409).send({ message: "Flight number already exists" });
-											}
+											if (existingFlight) return res.status(409).send({ message: "Flight number already exists" });
 
 											const newFlight = new Flight({
 												airlineId,
@@ -184,11 +169,7 @@ module.exports.createFlight = (req, res) => {
 
 											return newFlight.save()
 												.then(savedFlight => {
-													const seatDocuments = generateSeatDocuments(
-														savedFlight._id,
-														aircraft.totalSeats
-													);
-
+													const seatDocuments = generateSeatDocuments(savedFlight._id, aircraft.totalSeats);
 													return Seat.insertMany(seatDocuments)
 														.then(seats => {
 															return res.status(201).send({
@@ -209,13 +190,8 @@ module.exports.createFlight = (req, res) => {
 module.exports.getAllFlights = (req, res) => {
 	return Flight.find()
 		.then(result => {
-			if (result.length === 0) {
-				return res.status(404).send({ message: "No flights found" });
-			}
-			return res.status(200).send({
-				message: "Flights found",
-				result
-			});
+			if (result.length === 0) return res.status(404).send({ message: "No flights found" });
+			return res.status(200).send({ message: "Flights found", result });
 		})
 		.catch(err => errorHandler(err, req, res));
 };
@@ -245,15 +221,9 @@ module.exports.updateFlight = (req, res) => {
 		return res.status(400).send({ message: "At least one field is required to update" });
 	}
 
-	return Flight.findByIdAndUpdate(
-		req.params.id,
-		updates,
-		{ new: true }
-	)
+	return Flight.findByIdAndUpdate(req.params.id, updates, { new: true })
 	.then(result => {
-		if (!result) {
-			return res.status(404).send({ message: "Flight not found" });
-		}
+		if (!result) return res.status(404).send({ message: "Flight not found" });
 
 		if (status === "delayed" || status === "cancelled") {
 			Booking.find({ flightId: result._id, isActive: true })
@@ -273,10 +243,7 @@ module.exports.updateFlight = (req, res) => {
 				.catch(err => console.error("Booking lookup failed:", err));
 		}
 
-		return res.status(200).send({
-			message: "Flight updated successfully",
-			result
-		});
+		return res.status(200).send({ message: "Flight updated successfully", result });
 	}) 
 	.catch(err => errorHandler(err, req, res)); 
 };
@@ -284,28 +251,14 @@ module.exports.updateFlight = (req, res) => {
 module.exports.deactivateFlight = (req, res) => {
 	return Flight.findById(req.params.id)
 		.then(flight => {
-			if (!flight) {
-				return res.status(404).send({ message: "Flight not found" });
-			}
-			if (!flight.isActive) {
-				return res.status(400).send({ message: "Flight is already deactivated" });
-			}
+			if (!flight) return res.status(404).send({ message: "Flight not found" });
+			if (!flight.isActive) return res.status(400).send({ message: "Flight is already deactivated" });
 
-			return Flight.findByIdAndUpdate(
-				req.params.id,
-				{ isActive: false },
-				{ new: true }
-			)
+			return Flight.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true })
 			.then(result => {
-				return Seat.updateMany(
-					{ flightId: req.params.id },
-					{ isActive: false }
-				)
+				return Seat.updateMany({ flightId: req.params.id }, { isActive: false })
 				.then(() => {
-					return res.status(200).send({
-						message: "Flight deactivated successfully",
-						result
-					});
+					return res.status(200).send({ message: "Flight deactivated successfully", result });
 				});
 			});
 		})
@@ -315,28 +268,14 @@ module.exports.deactivateFlight = (req, res) => {
 module.exports.reactivateFlight = (req, res) => {
 	return Flight.findById(req.params.id)
 		.then(flight => {
-			if (!flight) {
-				return res.status(404).send({ message: "Flight not found" });
-			}
-			if (flight.isActive) {
-				return res.status(400).send({ message: "Flight is already active" });
-			}
+			if (!flight) return res.status(404).send({ message: "Flight not found" });
+			if (flight.isActive) return res.status(400).send({ message: "Flight is already active" });
 
-			return Flight.findByIdAndUpdate(
-				req.params.id,
-				{ isActive: true },
-				{ new: true }
-			)
+			return Flight.findByIdAndUpdate(req.params.id, { isActive: true }, { new: true })
 			.then(result => {
-				return Seat.updateMany(
-					{ flightId: req.params.id, isOccupied: false },
-					{ isActive: true }
-				)
+				return Seat.updateMany({ flightId: req.params.id, isOccupied: false }, { isActive: true })
 				.then(() => {
-					return res.status(200).send({
-						message: "Flight reactivated successfully",
-						result
-					});
+					return res.status(200).send({ message: "Flight reactivated successfully", result });
 				});
 			});
 		})
