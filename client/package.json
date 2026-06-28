@@ -1,0 +1,26 @@
+{
+  "name": "flight606",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tabler/icons-vue": "^3.44.0",
+    "@tabler/icons-webfont": "^3.44.0",
+    "axios": "^1.18.0",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "notyf": "^3.10.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.34",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.0.12"
+  }
+}

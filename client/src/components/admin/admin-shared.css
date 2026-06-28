@@ -1,0 +1,820 @@
+/* ══════════════════════════════════════════════════
+   admin-shared.css — Flight606 Admin Component Styles
+   All values use design tokens from style.css.
+   Import this file in each admin component's <style scoped>.
+   ══════════════════════════════════════════════════ */
+
+/* ── Header (ps-header override for action button layout) ── */
+.ps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Outline Gold Button (header actions) ── */
+.btn-outline-gold {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-decoration: none;
+  border: 1px solid var(--gold);
+  padding: 9px 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.btn-outline-gold:hover {
+  background: var(--gold);
+  color: var(--ink-on-gold);
+}
+.btn-outline-gold .ti { font-size: 0.9rem; }
+
+/* ── Create/Filter Form Panel ── */
+.admin-form-panel {
+  background: var(--gold-dim);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  transition: var(--theme-transition);
+}
+
+.admin-form-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 14px;
+}
+
+/* ── Two-Column Form Grid ── */
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+.admin-form-grid .col-span-2 { grid-column: span 2; }
+
+/* ── Single-Column Stacked Form ── */
+.admin-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .admin-form-grid { grid-template-columns: 1fr; }
+  .admin-form-grid .col-span-2 { grid-column: span 1; }
+}
+
+/* ── Loading State ── */
+.admin-loading {
+  padding: 56px 0;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.admin-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 1.2rem;
+  color: var(--gold);
+}
+
+/* ── Table Wrapper ── */
+.admin-table-wrap { overflow-x: auto; }
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 13px 14px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-dim);
+  vertical-align: middle;
+  transition: color 0.35s ease;
+}
+
+.admin-table tbody tr:last-child td { border-bottom: none; }
+
+.admin-table tbody tr:hover td { background: var(--gold-dim); }
+
+.admin-empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 48px 0 !important;
+  font-size: 0.82rem;
+}
+
+/* ── Status Badges ── */
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge-active   { background: rgba(46, 204, 113, 0.14); color: var(--success); }
+.badge-inactive { background: rgba(255, 77, 77, 0.14);  color: var(--error); }
+.badge-warning  { background: rgba(212, 175, 55, 0.18); color: var(--gold); }
+.badge-muted    { background: var(--glass-bg-lt);       color: var(--muted); border: 1px solid var(--border-dim); }
+
+/* ── Table Action Buttons ── */
+.admin-actions-cell { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+
+.btn-table-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  padding: 5px 12px;
+  border-radius: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  white-space: nowrap;
+}
+.btn-table-action:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+.btn-table-action .ti { font-size: 0.85rem; }
+
+.btn-table-danger {
+  background: rgba(255, 77, 77, 0.08);
+  border-color: var(--error);
+  color: var(--error);
+}
+.btn-table-danger:hover {
+  background: rgba(255, 77, 77, 0.15);
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.btn-table-success {
+  background: rgba(46, 204, 113, 0.08);
+  border-color: var(--success);
+  color: var(--success);
+}
+.btn-table-success:hover {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+/* ── Icon-Only Table Action Buttons ── */
+.btn-table-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  border-radius: 3px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+}
+.btn-table-icon:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.btn-table-icon.danger:hover { border-color: var(--error); color: var(--error); background: rgba(255, 77, 77, 0.08); }
+.btn-table-icon.success:hover { border-color: var(--success); color: var(--success); background: rgba(46, 204, 113, 0.08); }
+
+/* ── Stats Row ── */
+.admin-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.admin-stat-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  text-align: center;
+  transition: var(--theme-transition);
+  box-shadow: 0 4px 16px var(--glass-shadow);
+}
+
+.admin-stat-number {
+  font-family: var(--font-serif);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.admin-stat-number.stat-error   { color: var(--error); }
+.admin-stat-number.stat-success { color: var(--success); }
+.admin-stat-number.stat-muted   { color: var(--muted); }
+
+.admin-stat-label {
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .admin-stats-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Filter/Search Bar ── */
+.admin-filter-bar {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  transition: var(--theme-transition);
+}
+
+.admin-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gold);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.admin-search-input {
+  width: 100%;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 9px 14px 9px 36px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.admin-search-input:focus   { border-color: var(--gold); }
+.admin-search-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+.admin-filter-select {
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 9px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  min-width: 160px;
+}
+.admin-filter-select:focus { border-color: var(--gold); }
+.admin-filter-select option { background: var(--bg-60-mid); color: var(--text); }
+
+.admin-filter-count {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* ── Refresh Button ── */
+.btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+}
+.btn-refresh:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+.btn-refresh .ti { font-size: 0.85rem; }
+
+/* ── Empty State ── */
+.admin-empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--muted);
+}
+.admin-empty-state .ti {
+  font-size: 2.8rem;
+  color: var(--border);
+  display: block;
+  margin-bottom: 12px;
+}
+.admin-empty-state p {
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+/* ── Modal ── */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.18s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.admin-modal {
+  background: var(--bg-60-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px var(--glass-shadow);
+  animation: modalUp 0.2s ease;
+}
+
+.admin-modal-lg { max-width: 720px; }
+
+@keyframes modalUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.admin-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-modal-header h4 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 3px;
+  transition: color 0.2s ease, background 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+.admin-modal-close:hover { color: var(--text); background: var(--border-dim); }
+
+.admin-modal-body {
+  padding: 22px 24px;
+}
+
+.admin-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Airline Logo ── */
+.admin-airline-logo {
+  height: 26px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+/* ── Progress Bar ── */
+.admin-progress-wrap { margin-top: 4px; }
+
+.admin-progress {
+  height: 6px;
+  background: var(--glass-bg-lt);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border-dim);
+}
+
+.admin-progress-bar {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.admin-progress-bar.bar-danger  { background: var(--error); }
+.admin-progress-bar.bar-success { background: var(--success); }
+
+/* ── Detail Info Table ── */
+.admin-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+}
+
+.admin-detail-table td {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-dim);
+  vertical-align: top;
+  color: var(--text);
+}
+
+.admin-detail-table tr:last-child td { border-bottom: none; }
+
+.admin-detail-label {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  width: 140px;
+  padding-right: 16px;
+}
+
+/* ── Message Box (detail modal body) ── */
+.admin-message-box {
+  background: var(--gold-dim);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.65;
+  margin-bottom: 16px;
+}
+
+/* ── Seat Map Styles ── */
+.seat-btn {
+  width: 46px;
+  height: 32px;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  border-radius: 3px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.seat-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px var(--glass-shadow); }
+
+.seat-business {
+  background: var(--accent-30-gls);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.seat-economy {
+  background: rgba(46, 204, 113, 0.08);
+  border-color: var(--success);
+  color: var(--success);
+}
+.seat-occupied {
+  background: rgba(255, 77, 77, 0.10);
+  border-color: var(--error);
+  color: var(--error);
+  cursor: pointer;
+}
+.seat-occupied:hover { background: rgba(255, 77, 77, 0.18); }
+.seat-inactive {
+  background: var(--glass-bg-lt);
+  border-color: var(--border-dim);
+  color: var(--border);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.seat-selected {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ── Payment Status Cards ── */
+.status-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.status-option-card {
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  background: var(--glass-bg-lt);
+  text-align: center;
+}
+.status-option-card:hover { border-color: var(--gold); background: var(--gold-dim); }
+.status-option-card.selected { border-color: var(--gold); background: var(--gold-dim); }
+
+.status-option-card .ti { font-size: 1.4rem; display: block; margin-bottom: 4px; }
+.status-option-card .option-label {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.status-option-card.selected .option-label { color: var(--gold); }
+
+/* Flight status badge map */
+.badge-scheduled { background: rgba(212, 175, 55, 0.14); color: var(--gold); }
+.badge-delayed   { background: rgba(255, 77, 77, 0.12);  color: var(--error); }
+.badge-on-time   { background: rgba(46, 204, 113, 0.12); color: var(--success); }
+.badge-cancelled { background: rgba(255, 77, 77, 0.18);  color: var(--error); }
+.badge-departed  { background: var(--glass-bg-lt);       color: var(--muted); border: 1px solid var(--border-dim); }
+.badge-arrived   { background: var(--glass-bg-lt);       color: var(--muted); border: 1px solid var(--border-dim); }
+
+/* ══════════════════════════════════════════════════
+   ADDITIONS — small reusable primitives needed to bring
+   every admin/ component into line with the rest of the
+   design system. Token-driven only, nothing hardcoded.
+   ══════════════════════════════════════════════════ */
+
+/* ── Section Header — icon + title, consistent across all admin pages ── */
+.ps-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ps-header h3 .ti { color: var(--gold); font-size: 0.85rem; }
+
+/* ── Text Micro-Utilities ── */
+.muted      { color: var(--muted); }
+.capitalize { text-transform: capitalize; }
+.mono       { font-family: ui-monospace, 'SF Mono', Consolas, monospace; letter-spacing: 0.02em; }
+
+.cell-sub {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Dim an entire row (e.g. a deactivated account) without hardcoding colours */
+.row-inactive { opacity: 0.55; }
+
+/* ── Inline Note — passport expiry, admin-grant warnings, status hints ── */
+.admin-inline-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.admin-inline-note .ti { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
+.admin-inline-note.note-warning { color: var(--gold); }
+.admin-inline-note.note-error   { color: var(--error); }
+.admin-inline-note.note-success { color: var(--success); }
+
+/* ── Disabled states for interactive admin controls ── */
+.btn-refresh:disabled,
+.btn-table-action:disabled,
+.btn-table-icon:disabled,
+.btn-gold-full:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Footer-scoped sizing — keep primary CTA inline instead of full-width ── */
+.admin-modal-footer .btn-gold-full {
+  width: auto;
+  padding: 11px 26px;
+  margin-bottom: 0;
+}
+
+/* ── Block variant for full-width table-action buttons (detail panels) ── */
+.btn-table-action.btn-block {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 16px;
+}
+
+/* ── 6-Up Stats Row (seat map: total/occupied/available/rate/business/economy) ── */
+.admin-stats-row.cols-6 { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 900px) {
+  .admin-stats-row.cols-6 { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 640px) {
+  .admin-stats-row.cols-6 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Small seat swatch variant, used in seat-map legends ── */
+.seat-btn.seat-sm {
+  width: 38px;
+  height: 28px;
+  font-size: 0.55rem;
+}
+
+/* ── Seat grid wrapper (business/economy seat buttons) ── */
+.admin-seat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Split layout — seat map + detail panel side by side ── */
+.admin-split-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .admin-split-layout { grid-template-columns: 1fr; }
+}
+
+.admin-detail-panel {
+  border-left: 1px solid var(--border-dim);
+  padding-left: 24px;
+}
+@media (max-width: 900px) {
+  .admin-detail-panel {
+    border-left: none;
+    border-top: 1px solid var(--border-dim);
+    padding-left: 0;
+    padding-top: 20px;
+  }
+}
+
+/* ── Tiny layout helper ── */
+.ml-auto { margin-left: auto; }
+
+/* ══════════════════════════════════════════════════
+   SIDEBAR SEMANTIC TOKENS
+   Two tokens that replace the raw --muted / --text
+   references inside AdminSidebar.vue.  By keeping
+   the per-theme overrides here (alongside all other
+   token definitions) the sidebar never needs its own
+   [data-theme] blocks.
+
+   Dark theme values   → match the original --muted /
+                         --text so the dark-mode look
+                         is completely unchanged.
+   Light theme values  → flip to legible dark tones so
+                         text is visible on a white
+                         sidebar background.
+   ══════════════════════════════════════════════════ */
+
+/* Dark theme (default) */
+:root {
+    --sidebar-link:       var(--muted);   /* dim but readable on dark bg  */
+    --sidebar-link-hover: var(--text);    /* full brightness on hover      */
+}
+
+/* Light theme */
+[data-theme="light"] {
+    --sidebar-link:       #374151;        /* slate-700 — clear on white bg */
+    --sidebar-link-hover: #111827;        /* slate-900 — strong on hover   */
+}
+
+/* ══════════════════════════════════════════════════
+   ADMIN DASHBOARD SHELL — .admin-layout / .admin-main
+   Mobile-first: stacked by default; side-by-side flex
+   from 992px up. Breakpoint matches AdminSidebar.vue's
+   own drawer breakpoint (991/992px) so the shell and
+   the sidebar switch layouts at the same point.
+   ══════════════════════════════════════════════════ */
+
+.admin-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.admin-main {
+  width: 100%;
+  min-width: 0; /* required so .admin-table-wrap's overflow-x:auto can actually engage */
+}
+
+@media (min-width: 992px) {
+  .admin-layout {
+    flex-direction: row;
+    align-items: stretch;   /* lets the sidebar's gold border-right run full height, not just nav height */
+    gap: 32px;
+  }
+
+  .admin-main {
+    flex: 1 1 0%;
+    width: auto;
+    padding-top: 4px;       /* matches .admin-sidebar's padding-top so both columns share the same vertical start point */
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-stats-row { 
+    grid-template-columns: repeat(2, 1fr); /* Automatically wraps into a clean 2x2 grid */
+  }
+}
+
+@media (max-width: 480px) {
+  /* Optional: Stack into a single row on ultra-narrow phones if text still pinches */
+  .admin-stat-card {
+    padding: 12px;
+  }
+}
