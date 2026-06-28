@@ -263,3 +263,48 @@ export async function getMyPassengers() {
     const { data: res } = await api.get("/passengers/get-my-passengers");
     return res;
 }
+
+
+// ============================================================
+// BOOKING RESOURCE (RESTORED MISSING EXPORTS)
+// ============================================================
+
+export async function createBookingUser(data) {
+    const { data: res } = await api.post("/bookings/create-booking", data);
+    return res;
+}
+
+export async function createBookingGuest(data) {
+    const { data: res } = await api.post("/bookings/create-guest-booking", data);
+    return res;
+}
+
+export async function getMyBookingsUser() {
+    const { data: res } = await api.get("/bookings/my-bookings");
+    return res;
+}
+
+export async function getMyBookingsGuest(params) {
+    const { data: res } = await api.get("/bookings/guest-bookings", { params });
+    return res;
+}
+
+export async function cancelBookingUser(bookingReference) {
+    const { data: res } = await api.patch(`/bookings/cancel/${bookingReference}`);
+    return res;
+}
+
+export async function cancelBookingGuest(bookingReference, data) {
+    const { data: res } = await api.patch(`/bookings/cancel-guest/${bookingReference}`, data);
+    return res;
+}
+
+export async function rescheduleBookingUser(bookingReference, data) {
+    const { data: res } = await api.patch(`/bookings/reschedule/${bookingReference}`, data);
+    return res;
+}
+
+export async function getPassengersByBooking(bookingId) {
+    const { data: res } = await api.get(`/bookingpassengers/booking/${bookingId}`);
+    return res;
+}
