@@ -116,9 +116,11 @@ async function handleSearch() {
     const searchPromises = segments.map(seg => searchFlights(seg.origin, seg.destination, seg.date))
     const responses = await Promise.allSettled(searchPromises)
     
+    // PASTE IT DIRECTLY HERE RIGHT INSIDE YOUR TRY BLOCK:
     responses.forEach((res, index) => {
       if (res.status === 'fulfilled') {
-        flightResultsPerSegment.value[index] = res.value.flights || res.value.result || res.value || []
+        const rawFlights = res.value.flights || res.value.result || res.value || []
+        flightResultsPerSegment.value[index] = Array.isArray(rawFlights) ? rawFlights : [rawFlights]
       } else {
         flightResultsPerSegment.value[index] = []
       }
@@ -126,12 +128,7 @@ async function handleSearch() {
     
     selectedFlightIds.value = new Array(segments.length).fill(null)
   } catch (err) {
-    console.error(err)
-    errorMessage.value = 'An error occurred while compiling available flight routes.'
-  } finally {
-    isSearching.value = false
-  }
-}
+
 
 function selectFlight(segmentIndex, flightId) {
   if (selectedFlightIds.value[segmentIndex] === flightId) {
