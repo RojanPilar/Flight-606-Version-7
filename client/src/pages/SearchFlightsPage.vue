@@ -320,74 +320,74 @@ function calcTravelTime(departure, arrival) {
                 </button>
               </div>
             </div>
-                        <!-- SEGMENT TWO: INBOUND/RETURN FLIGHT GRID SELECTION BLOCK -->
-                        <div v-if="tripType === 'roundtrip'" class="mt-5">
-                          <div class="results-banner gold-banner-dim">
-                            🔄 Select return flight from <strong>{{ toLabel }}</strong> to <strong>{{ fromLabel }}</strong>
-                          </div>
 
-                          <div v-if="!flightResultsPerSegment[1] || flightResultsPerSegment[1].length === 0" class="alert alert-warning text-center my-3">
-                            No matching return flights found for this segment layout on the specified date.
-                          </div>
+            <div v-if="tripType === 'roundtrip'" class="mt-5">
+              <div class="results-banner gold-banner-dim">
+                🔄 Select return flight from <strong>{{ toLabel }}</strong> to <strong>{{ fromLabel }}</strong>
+              </div>
 
-                          <!-- Return Flight Cards Generation Loop -->
-                          <div 
-                            v-for="flight in flightResultsPerSegment[1]" 
-                            :key="flight._id"
-                            class="flight-card" 
-                            :class="{ selected: selectedFlightIds[1] === flight._id }"
-                            @click="selectFlight(1, flight._id)"
-                          >
-                            <div class="fc-endpoint">
-                              <div class="fc-time">{{ formatTime(flight.departureTime) }}</div>
-                              <div class="fc-airport">{{ toLabel.split('(')[0].trim() }} · {{ flight.originAirportId?.iataCode || 'SIN' }}</div>
-                              <div class="fc-date">{{ formatDateLabel(flight.departureTime) }}</div>
-                            </div>
-                            <div class="fc-mid">
-                              <div class="fc-duration">{{ calcTravelTime(flight.departureTime, flight.arrivalTime) }}</div>
-                              <div class="fc-line"><span class="fc-plane-icon"><i class="bi bi-airplane-fill"></i></span></div>
-                              <div class="fc-stops">Direct</div>
-                            </div>
-                            <div class="fc-endpoint">
-                              <div class="fc-time">{{ formatTime(flight.arrivalTime) }}</div>
-                              <div class="fc-airport">{{ fromLabel.split('(')[0].trim() }} · {{ flight.destinationAirportId?.iataCode || 'MNL' }}</div>
-                              <div class="fc-date">{{ formatDateLabel(flight.arrivalTime) }}</div>
-                            </div>
-                            <div class="fc-price-box">
-                              <span class="fc-badge">Economy Class</span>
-                              <div class="fc-price-amt">₱{{ flight.basePrice?.toLocaleString() }}</div>
-                              <div class="fc-price-note">Flight {{ flight.flightNumber }}</div>
-                              <button class="fc-select-btn" @click.stop="selectFlight(1, flight._id)">
-                                {{ selectedFlightIds[1] === flight._id ? 'Selected ✓' : 'Select →' }}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+              <div v-if="!flightResultsPerSegment[1] || flightResultsPerSegment[1].length === 0" class="alert alert-warning text-center my-3">
+                No matching return flights found for this segment layout on the specified date.
+              </div>
 
-                      </div> <!-- End of results wrapper -->
-
-                      <!-- DYNAMIC BOTTOM SELECTION PROGRESS BAR BANNER -->
-                      <div class="selection-progress-bar mt-5 p-3 d-flex justify-content-between align-items-center bg-dark text-white rounded">
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="fw-bold">Selection Progress:</span>
-                          <span class="badge bg-warning text-dark px-3 py-2 fs-6">
-                            {{ selectedFlightIds.filter(id => id !== null).length }} / {{ tripType === 'roundtrip' ? 2 : 1 }} flight selected
-                          </span>
-                        </div>
-                        
-                        <button 
-                          class="btn text-dark fw-bold px-4 py-2" 
-                          :class="isSelectionComplete ? 'btn-warning' : 'btn-secondary disabled'"
-                          :disabled="!isSelectionComplete"
-                          @click="proceedToCheckout"
-                        >
-                          CONFIRM BOOKING SEQUENCE →
-                        </button>
-                      </div>
-
-                    </div> <!-- End of inner container -->
-                  </div>
-
+              <!-- Return Flight Cards Generation Loop -->
+              <div 
+                v-for="flight in flightResultsPerSegment[1]" 
+                :key="flight._id"
+                class="flight-card" 
+                :class="{ selected: selectedFlightIds[1] === flight._id }"
+                @click="selectFlight(1, flight._id)"
+              >
+                <div class="fc-endpoint">
+                  <div class="fc-time">{{ formatTime(flight.departureTime) }}</div>
+                  <div class="fc-airport">{{ toLabel.split('(')[0].trim() }} · {{ flight.originAirportId?.iataCode || 'SIN' }}</div>
+                  <div class="fc-date">{{ formatDateLabel(flight.departureTime) }}</div>
+                </div>
+                <div class="fc-mid">
+                  <div class="fc-duration">{{ calcTravelTime(flight.departureTime, flight.arrivalTime) }}</div>
+                  <div class="fc-line"><span class="fc-plane-icon"><i class="bi bi-airplane-fill"></i></span></div>
+                  <div class="fc-stops">Direct</div>
+                </div>
+                <div class="fc-endpoint">
+                  <div class="fc-time">{{ formatTime(flight.arrivalTime) }}</div>
+                  <div class="fc-airport">{{ fromLabel.split('(')[0].trim() }} · {{ flight.destinationAirportId?.iataCode || 'MNL' }}</div>
+                  <div class="fc-date">{{ formatDateLabel(flight.arrivalTime) }}</div>
+                </div>
+                <div class="fc-price-box">
+                  <span class="fc-badge">Economy Class</span>
+                  <div class="fc-price-amt">₱{{ flight.basePrice?.toLocaleString() }}</div>
+                  <div class="fc-price-note">Flight {{ flight.flightNumber }}</div>
+                  <button class="fc-select-btn" @click.stop="selectFlight(1, flight._id)">
+                    {{ selectedFlightIds[1] === flight._id ? 'Selected ✓' : 'Select →' }}
+                  </button>
                 </div>
               </div>
-            </template>
+            </div> <!-- End of Roundtrip Check Wrapper -->
+
+            <!-- SELECTION PROGRESS PROGRESS FOOTER CONTROL DOCK -->
+            <div class="mt-5 mb-4">
+              <div class="d-flex justify-content-between align-items-center bg-dark p-3 rounded border border-warning">
+                <div class="selection-progress-box">
+                  <span class="text-white me-2">Selection Progress:</span>
+                  <span class="badge bg-warning text-dark px-3 py-2">
+                    {{ selectedFlightIds.filter(id => id !== null).length }} / {{ tripType === 'roundtrip' ? 2 : 1 }} flight selected
+                  </span>
+                </div>
+                <div>
+                  <button 
+                    class="btn btn-warning px-4 py-2 text-dark fw-bold" 
+                    :disabled="!isSelectionComplete"
+                    @click="proceedToCheckout"
+                  >
+                    Confirm Booking Sequence →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div> <!-- End of hasSearched Check Wrapper -->
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
