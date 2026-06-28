@@ -177,15 +177,17 @@ export async function reactivateAircraft(id) {
 
 // --- Public ---
 export async function searchFlights(originAirportId, destinationAirportId, departureDate) {
-    const { data: res } = await api.get("/flights/search", {
-        params: { originAirportId, destinationAirportId, departureDate }
-    });
-    return res;
+  const date =
+    departureDate instanceof Date
+      ? departureDate.toISOString().slice(0, 10) // YYYY-MM-DD (UTC)
+      : String(departureDate);
+
+  const { data: res } = await api.get("/flights/search", {
+    params: { originAirportId, destinationAirportId, departureDate: date }
+  });
+  return res;
 }
-export async function getFlightById(id) {
-    const { data: res } = await api.get(`/flights/get-flight/${id}`);
-    return res;
-}
+
 export async function getFlightStatus(flightNumber) {
     const { data: res } = await api.get(`/flights/status/${flightNumber}`);
     return res;

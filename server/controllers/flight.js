@@ -33,63 +33,81 @@ const generateSeatDocuments = (flightId, totalSeats) => {
 // ============================================================
 
 module.exports.searchFlights = (req, res) => {
-	if (!req.query.originAirportId) {
-		return res.status(400).send({ message: "Origin Airport ID required" });
-	}
-	if (!req.query.destinationAirportId) {
-		return res.status(400).send({ message: "Destination Airport ID required" });
-	}
-	if (!req.query.departureDate) {
-		return res.status(400).send({ message: "Departure date required" });
-	}
+  if (!req.query.originAirportId) {
+    return res.status(400).send({ message: "Origin Airport ID required" });
+  }
+  if (!req.query.destinationAirportId) {
+    return res.status(400).send({ message: "Destination Airport ID required" });
+  }
+  if (!req.query.departureDate) {
+    return res.status(400).send({ message: "Departure date required" });
+  }
 
-	// Create a wider timezone buffer window (captures shifts between UTC and local time)
-	const baseDate = new Date(req.query.departureDate);
-	
-	const startOfDay = new Date(baseDate);
-	startOfDay.setUTCHours(startOfDay.getUTCHours() - 12); // Look 12 hours backward
+  // --- Normalize the incoming date to YYYY-MM-DD, no matter the format ---
+  // Accepts "2026-07-01", "07/01/2026", "2026-07-01T00:00:00.000Z", Date objects, etc.
+  const toYMD = (input) => {
+    if (!input) return null;
 
-	const endOfDay = new Date(baseDate);
-	endOfDay.setUTCHours(endOfDay.getUTCHours() + 36);   // Look 36 hours forward
+    // Already ISO date-only?
+    if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+      return input;
+    }
 
-	const originQuery = [];
-	const destQuery = [];
+    // "MM/DD/YYYY" or "M/D/YYYY"
+    if (typeof input === "string" && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(input)) {
+      const [m, d, y] = input.split("/").map(Number);
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
 
-	if (typeof req.query.originAirportId === 'string') {
-		originQuery.push({ originAirportId: req.query.originAirportId });
-		originQuery.push({ originAirportId: new RegExp(`^${req.query.originAirportId}$`, 'i') });
-		if (req.query.originAirportId.match(/^[0-9a-fA-F]{24}$/)) {
-			originQuery.push({ originAirportId: new mongoose.Types.ObjectId(req.query.originAirportId) });
-		}
-	}
+    // Fallback: let Date parse it, then pull UTC parts
+    const parsed = new Date(input);
+    if (isNaN(parsed.getTime())) return null;
+    const y = parsed.getUTCFullYear();
+    const m = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
 
-	if (typeof req.query.destinationAirportId === 'string') {
-		destQuery.push({ destinationAirportId: req.query.destinationAirportId });
-		destQuery.push({ destinationAirportId: new RegExp(`^${req.query.destinationAirportId}$`, 'i') });
-		if (req.query.destinationAirportId.match(/^[0-9a-fA-F]{24}$/)) {
-			destQuery.push({ destinationAirportId: new mongoose.Types.ObjectId(req.query.destinationAirportId) });
-		}
-	}
+  const ymd = toYMD(req.query.departureDate);
+  if (!ymd) {
+    return res.status(400).send({ message: "Invalid departure date format" });
+  }
 
-	return Flight.find({
-		$and: [
-			{ $or: originQuery },
-			{ $or: destQuery },
-			{ departureTime: { $gte: startOfDay, $lte: endOfDay } },
-			{ status: { $in: ["scheduled", "on-time", "delayed"] } }
-		]
-	})
-	.then(result => {
-		if (result.length === 0) {
-			return res.status(404).send({ message: "No flights found for this date" });
-		}
-		return res.status(200).send({
-			message: "Flights found",
-			flights: result
-		});
-	})
-	.catch(err => errorHandler(err, req, res));
+  // Build a clean [startOfDay, nextDay) UTC window — covers any flight stored
+  // anywhere on that calendar date regardless of timezone offsets.
+  const startOfDay = new Date(`${ymd}T00:00:00.000Z`);
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+  // --- Airport ID matching (kept tolerant like before) ---
+  const buildIdQuery = (field, value) => {
+    const clauses = [{ [field]: value }];
+    if (/^[0-9a-fA-F]{24}$/.test(value)) {
+      clauses.push({ [field]: new mongoose.Types.ObjectId(value) });
+    }
+    return clauses;
+  };
+
+  const originQuery = buildIdQuery("originAirportId", req.query.originAirportId);
+  const destQuery = buildIdQuery("destinationAirportId", req.query.destinationAirportId);
+
+  return Flight.find({
+    $and: [
+      { $or: originQuery },
+      { $or: destQuery },
+      { departureTime: { $gte: startOfDay, $lt: endOfDay } },
+      { status: { $in: ["scheduled", "on-time", "delayed"] } },
+      { isActive: true }
+    ]
+  })
+    .then((result) => {
+      if (result.length === 0) {
+        return res.status(404).send({ message: "No flights found for this date" });
+      }
+      return res.status(200).send({ message: "Flights found", flights: result });
+    })
+    .catch((err) => errorHandler(err, req, res));
 };
+
 
 
 module.exports.getFlightById = (req, res) => {

@@ -103,31 +103,51 @@ async function handleSearch() {
   flightResultsPerSegment.value = []
   selectedFlightIds.value = []
 
-  const segments = []
+  // Always YYYY-MM-DD — never run it through `new Date()` here, that re-introduces
+  // the local-timezone shift that caused the bug.
+  const normalize = (d) => {
+    if (!d) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+      const [m, day, y] = d.split('/')
+      return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`
+    }
+    return d
+  }
 
-  // FIXED: Send the raw date string "YYYY-MM-DD" directly without forced timezone shifts!
-  segments.push({ origin: fromVal.value, destination: toVal.value, date: sfDate.value })
-
+  const segments = [
+    { origin: fromVal.value, destination: toVal.value, date: normalize(sfDate.value) }
+  ]
   if (tripType.value === 'roundtrip') {
-    segments.push({ origin: toVal.value, destination: fromVal.value, date: returnDate.value })
+    segments.push({
+      origin: toVal.value,
+      destination: fromVal.value,
+      date: normalize(returnDate.value)
+    })
   }
 
   try {
-    const searchPromises = segments.map(seg => searchFlights(seg.origin, seg.destination, seg.date))
-    const responses = await Promise.allSettled(searchPromises)
-    
-    // PASTE IT DIRECTLY HERE RIGHT INSIDE YOUR TRY BLOCK:
+    const responses = await Promise.allSettled(
+      segments.map(seg => searchFlights(seg.origin, seg.destination, seg.date))
+    )
+
     responses.forEach((res, index) => {
       if (res.status === 'fulfilled') {
-        const rawFlights = res.value.flights || res.value.result || res.value || []
-        flightResultsPerSegment.value[index] = Array.isArray(rawFlights) ? rawFlights : [rawFlights]
+        const raw = res.value.flights || res.value.result || res.value || []
+        flightResultsPerSegment.value[index] = Array.isArray(raw) ? raw : [raw]
       } else {
         flightResultsPerSegment.value[index] = []
       }
     })
-    
+
     selectedFlightIds.value = new Array(segments.length).fill(null)
   } catch (err) {
+    console.error('Flight search failed:', err)
+    errorMessage.value = 'Something went wrong while searching for flights.'
+  } finally {
+    isSearching.value = false
+  }
+}
 
 
 function selectFlight(segmentIndex, flightId) {
