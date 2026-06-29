@@ -18,7 +18,7 @@ import {
 // ── UTILITY ACTION FOR ENRICHING BOOKING DATA ────────────────────────
 // This utility fixes the "DEP"/"ARR" placeholder issues and missing ID errors 
 // by pulling missing deep properties from your backend.
-async function enrichBooking(b, passengerMap = new Map()) {
+export async function enrichBooking(b, passengerMap = new Map()) {
   // Self-heal an unpopulated/shallow flightId
   try {
     const flightRef = b.flightId
