@@ -293,10 +293,30 @@ export const updateSeat = (id, payload) =>
 export const deactivateSeat = (id) =>
     api.patch(`/seats/deactivate-seat/${id}`);
 
+// ... Your existing code remains untouched up here ...
+
 // PATCH /seats/reactivate-seat/:id  (AdminSeats)
 // Admin only. Returns: { message, result }
 export const reactivateSeat = (id) =>
     api.patch(`/seats/reactivate-seat/${id}`);
+
+
+// ── REFACTORED TO MATCH YOUR AXIOS AXIS INSTANCE ───────────────────────
+
+/**
+ * Fetches flight details/status for the status search page
+ * GET /flights/status or your equivalent backend endpoint
+ */
+export const getFlightStatus = (flightNumber, date) =>
+    api.get('/flights/status', { params: { flightNumber, date } });
+
+/**
+ * Admin utility to update a specific passenger's details
+ * PATCH /admin/passengers/:passengerId or /passengers/update/:passengerId
+ */
+export const adminUpdatePassenger = (passengerId, payload) =>
+    api.patch(`/admin/passengers/${passengerId}`, payload);
+
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -566,4 +586,4 @@ export const createItinerary = (payload) =>
 // GET /itineraries/get-all  (AdminDashboard summary)
 // Admin only. Returns: { message, result: [...] }
 export const getAllItineraries = () =>
-    api.get('/itineraries/get-all');
+    api.get('/itineraries/get-all');E4R
