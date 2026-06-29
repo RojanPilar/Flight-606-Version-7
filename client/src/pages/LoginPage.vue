@@ -34,7 +34,12 @@ async function doLogin() {
 
     if (token) {
       await globalStore.getUserDetails(token)
-      router.push(route.query.redirect || { name: 'Home' })
+      // Redirect admin users to admin dashboard, others to home or redirect query
+      if (globalStore.isAdmin) {
+        router.push({ name: 'AdminDashboard' })
+      } else {
+        router.push(route.query.redirect || { name: 'Home' })
+      }
     } else {
       loginErr.value = true
     }

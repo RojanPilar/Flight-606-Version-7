@@ -7,7 +7,7 @@ import {
   createBookingUser, createBookingGuest,
   createBookingPassenger, createBookingPassengerGuest,
   createPaymentUser, createPaymentGuest,
-  getSeatsByFlight, getAirportById
+  getSeatsByFlight
 } from '../api.js'
 import { useBookingStore } from '../stores/booking.js'
 
@@ -20,28 +20,8 @@ const card = ref({ name: '', number: '', expiry: '', cvv: '' })
 const isProcessing = ref(false)
 const errorMsg = ref('')
 
-// Airport cache: { [stringId]: airportObject } — same pattern as BookFlightPage
-const airportCache = ref({})
-
-async function fetchAirport(rawId) {
-  const id = rawId ? String(rawId) : null
-  if (!id) return null
-  if (airportCache.value[id]) return airportCache.value[id]
-  try {
-    const res = await getAirportById(id)
-    const airport = res.result ?? res ?? null
-    if (airport?.iataCode) airportCache.value[id] = airport
-    return airport
-  } catch { return null }
-}
-
-function airportIata(rawId) {
-  const id = rawId ? String(rawId) : null
-  return airportCache.value[id]?.iataCode || null
-}
-
 // Pre-fetched profiles to prevent unnecessary 409 Conflict errors
-const savedPassengers = ref([])
+const savedPassengers = ref([]) 
 
 onMounted(async () => {
   if (bookingStore.legs.length === 0) {
@@ -64,17 +44,6 @@ onMounted(async () => {
     }
   }
 
-  // Fetch all airports referenced by every leg's flight object so legLabel()
-  // can show real IATA codes instead of DEP/ARR.
-  // leg.flight.originAirportId is a raw string ID — NOT a populated object.
-  const airportIdSet = new Set()
-  for (const leg of bookingStore.legs) {
-    const f = leg.flight || {}
-    if (f.originAirportId)      airportIdSet.add(String(f.originAirportId))
-    if (f.destinationAirportId) airportIdSet.add(String(f.destinationAirportId))
-  }
-  await Promise.allSettled([...airportIdSet].map(fetchAirport))
-
   // Optimize: Pre-fetch saved passengers on mount for authenticated users
   if (bookingStore.mode !== 'guest') {
     try {
@@ -87,14 +56,13 @@ onMounted(async () => {
 })
 
 function legLabel(leg, i) {
-  const f = leg.flight || {}
-  // originAirportId is a raw string ID from the store — look it up in the cache
-  const origin = airportIata(f.originAirportId) || f.originAirportId?.iataCode || '…'
-  const dest   = airportIata(f.destinationAirportId) || f.destinationAirportId?.iataCode || '…'
+  const f = leg.flight
+  const origin = f.originAirportId?.iataCode || 'DEP'
+  const dest = f.destinationAirportId?.iataCode || 'ARR'
   const dateLabel = f.departureTime
     ? new Date(f.departureTime).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
     : ''
-  const prefix = bookingStore.legs.length > 1 ? (i === 0 ? 'Departure · ' : 'Return · ') : ''
+  const prefix = bookingStore.legs.length > 1 ? (i === 0 ? 'Outbound · ' : 'Return · ') : ''
   return `${prefix}${origin} → ${dest} · ${dateLabel} · ${f.flightNumber || ''}`
 }
 

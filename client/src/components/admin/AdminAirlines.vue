@@ -1,10 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getAllAirlines, createAirline, updateAirline, deactivateAirline, reactivateAirline } from '../../api.js';
-import { usePagination } from './pagination.js';
 import AdminPagination from './AdminPagination.vue';
+import { usePagination } from './pagination.js';
 
 const airlines = ref([]);
+const { currentPage, totalPages, pagedItems, pageNumbers, goToPage } = usePagination(airlines);
 const errorMessage = ref('');
 const successMessage = ref('');
 const isLoading = ref(false);
@@ -14,16 +15,6 @@ const showCreateForm = ref(false);
 const form = ref({ name: '', iataCode: '', logoURL: '' });
 const editForm = ref({ id: null, logoURL: '' });
 const showEditModal = ref(false);
-
-// Pagination — no existing search/filter here, so we paginate
-// directly over the raw `airlines` list.
-const {
-    pagedItems: paginatedAirlines,
-    currentPage,
-    totalPages,
-    pageNumbers,
-    goToPage,
-} = usePagination(airlines, 10);
 
 async function loadAirlines() {
     try {
@@ -139,55 +130,52 @@ onMounted(loadAirlines);
                 <i class="ti ti-loader-2 admin-spinner"></i> Loading…
             </div>
 
-            <template v-else>
-                <div class="admin-table-wrap">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Logo</th>
-                                <th>Name</th>
-                                <th>IATA</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-if="airlines.length === 0">
-                                <td colspan="5" class="admin-empty-row">No airlines found.</td>
-                            </tr>
-                            <tr v-for="airline in paginatedAirlines" :key="airline._id">
-                                <td>
-                                    <img :src="airline.logoURL" :alt="airline.name" class="admin-airline-logo" />
-                                </td>
-                                <td>{{ airline.name }}</td>
-                                <td>
-                                    <span class="admin-badge badge-muted">{{ airline.iataCode }}</span>
-                                </td>
-                                <td>
-                                    <span class="admin-badge" :class="airline.isActive ? 'badge-active' : 'badge-inactive'">
-                                        {{ airline.isActive ? 'Active' : 'Inactive' }}
-                                    </span>
-                                </td>
-                                <td class="admin-actions-cell">
-                                    <button class="btn-table-action" @click="openEditModal(airline)">
-                                        <i class="ti ti-pencil"></i> Edit Logo
-                                    </button>
-                                    <button class="btn-table-action" :class="airline.isActive ? 'btn-table-danger' : 'btn-table-success'" @click="toggleStatus(airline)">
-                                        {{ airline.isActive ? 'Deactivate' : 'Reactivate' }}
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
+            <div v-else class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Logo</th>
+                            <th>Name</th>
+                            <th>IATA</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-if="airlines.length === 0">
+                            <td colspan="5" class="admin-empty-row">No airlines found.</td>
+                        </tr>
+                        <tr v-for="airline in pagedItems" :key="airline._id">
+                            <td>
+                                <img :src="airline.logoURL" :alt="airline.name" class="admin-airline-logo" />
+                            </td>
+                            <td>{{ airline.name }}</td>
+                            <td>
+                                <span class="admin-badge badge-muted">{{ airline.iataCode }}</span>
+                            </td>
+                            <td>
+                                <span class="admin-badge" :class="airline.isActive ? 'badge-active' : 'badge-inactive'">
+                                    {{ airline.isActive ? 'Active' : 'Inactive' }}
+                                </span>
+                            </td>
+                            <td class="admin-actions-cell">
+                                <button class="btn-table-action" @click="openEditModal(airline)">
+                                    <i class="ti ti-pencil"></i> Edit Logo
+                                </button>
+                                <button class="btn-table-action" :class="airline.isActive ? 'btn-table-danger' : 'btn-table-success'" @click="toggleStatus(airline)">
+                                    {{ airline.isActive ? 'Deactivate' : 'Reactivate' }}
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
                 <AdminPagination
                     :current-page="currentPage"
                     :total-pages="totalPages"
                     :page-numbers="pageNumbers"
                     @go-to-page="goToPage"
                 />
-            </template>
+            </div>
         </div>
 
         <!-- Edit Modal -->

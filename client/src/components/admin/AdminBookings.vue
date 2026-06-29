@@ -1,17 +1,33 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { getAllBookings, updateBookingStatus, deactivateBooking, reactivateBooking, getFlightById } from '../../api.js';
-import { usePagination } from './pagination.js';
 import AdminPagination from './AdminPagination.vue';
+import { usePagination } from './pagination.js';
 
 const bookings = ref([]);
-const isLoading = ref(true);
-const pageError = ref(null);
-
 const flightCache = ref({});
 const searchQuery = ref('');
 const filterStatus = ref('all');
 const filterActive = ref('all');
+
+const filteredBookings = computed(() => {
+    let list = bookings.value;
+    if (filterStatus.value !== 'all') list = list.filter(b => b.status === filterStatus.value);
+    if (filterActive.value === 'active') list = list.filter(b => b.isActive);
+    else if (filterActive.value === 'inactive') list = list.filter(b => !b.isActive);
+    if (searchQuery.value.trim()) {
+        const q = searchQuery.value.toLowerCase();
+        list = list.filter(b =>
+            b.bookingReference?.toLowerCase().includes(q) ||
+            b.guestEmail?.toLowerCase().includes(q) ||
+            flightCache.value[b.flightId]?.flightNumber?.toLowerCase().includes(q)
+        );
+    }
+    return list;
+});
+const { currentPage, totalPages, pagedItems, pageNumbers, goToPage } = usePagination(filteredBookings);
+const isLoading = ref(true);
+const pageError = ref(null);
 
 const showStatusModal = ref(false);
 const statusTarget = ref(null);
@@ -40,33 +56,6 @@ const stats = computed(() => ({
     confirmed: bookings.value.filter(b => b.status === 'confirmed').length,
     cancelled: bookings.value.filter(b => b.status === 'cancelled').length,
 }));
-
-const filteredBookings = computed(() => {
-    let list = bookings.value;
-    if (filterStatus.value !== 'all') list = list.filter(b => b.status === filterStatus.value);
-    if (filterActive.value === 'active') list = list.filter(b => b.isActive);
-    else if (filterActive.value === 'inactive') list = list.filter(b => !b.isActive);
-    if (searchQuery.value.trim()) {
-        const q = searchQuery.value.toLowerCase();
-        list = list.filter(b =>
-            b.bookingReference?.toLowerCase().includes(q) ||
-            b.guestEmail?.toLowerCase().includes(q) ||
-            flightCache.value[b.flightId]?.flightNumber?.toLowerCase().includes(q)
-        );
-    }
-    return list;
-});
-
-// Pagination — runs over the already-filtered list so search/status/active
-// filters and pagination compose correctly. The composable's internal watch
-// on `items` resets currentPage to 1 whenever a filter changes the list.
-const {
-    pagedItems: paginatedBookings,
-    currentPage,
-    totalPages,
-    pageNumbers,
-    goToPage,
-} = usePagination(filteredBookings, 10);
 
 const fetchFlightForBooking = async (flightId) => {
     if (flightCache.value[flightId]) return;
@@ -154,19 +143,8 @@ onMounted(fetchBookings);
 
         <div class="ps-body">
 
-            <!--
-              Stats row — NOTE: this previously carried an inline
-              style="grid-template-columns: repeat(4,1fr);" attribute.
-              Inline styles always win over an external stylesheet's rules,
-              even ones inside a @media query, so it was permanently
-              overriding admin-shared.css's mobile breakpoint
-              (.admin-stats-row { grid-template-columns: 1fr 1fr; } at
-              max-width:640px). That's what was forcing 4 stat cards into
-              4 columns on phone screens and pushing the 4th one off-screen.
-              Removed — the shared CSS rule now applies correctly at every
-              width on its own.
-            -->
-            <div class="admin-stats-row">
+            <!-- Stats -->
+            <div class="admin-stats-row" style="grid-template-columns: repeat(4,1fr);">
                 <div class="admin-stat-card">
                     <div class="admin-stat-number">{{ stats.total }}</div>
                     <div class="admin-stat-label">Total</div>
@@ -224,77 +202,74 @@ onMounted(fetchBookings);
             </div>
 
             <!-- Table -->
-            <template v-else>
-                <div class="admin-table-wrap">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Reference</th>
-                                <th>Flight</th>
-                                <th>Booker</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Active</th>
-                                <th style="text-align:right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="booking in paginatedBookings" :key="booking._id" :class="{ 'row-inactive': !booking.isActive }">
-                                <td class="cell-mono">{{ booking.bookingReference }}</td>
-                                <td>
-                                    <span v-if="flightCache[booking.flightId]" class="cell-highlight">
-                                        {{ flightCache[booking.flightId].flightNumber }}
-                                    </span>
-                                    <span v-else class="cell-muted">Loading…</span>
-                                </td>
-                                <td>
-                                    <span v-if="booking.guestEmail" class="cell-muted">
-                                        <i class="ti ti-user"></i> {{ booking.guestEmail }}
-                                    </span>
-                                    <span v-else-if="booking.userId" class="cell-muted cell-mono" style="font-size:0.72rem;">
-                                        <i class="ti ti-user-check"></i> {{ String(booking.userId).substring(0, 12) }}…
-                                    </span>
-                                    <span v-else class="cell-muted">—</span>
-                                </td>
-                                <td class="cell-highlight">₱{{ Number(booking.totalAmount).toLocaleString() }}</td>
-                                <td>
-                                    <span class="admin-badge" :class="getStatusMeta(booking.status).badgeClass">
-                                        <i class="ti" :class="getStatusMeta(booking.status).icon"></i>
-                                        {{ getStatusMeta(booking.status).label }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="admin-badge" :class="booking.isActive ? 'badge-active' : 'badge-inactive'">
-                                        {{ booking.isActive ? 'Active' : 'Inactive' }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="admin-actions-cell" style="justify-content:flex-end;">
-                                        <button class="btn-table-icon" title="View details" @click="openDetail(booking)">
-                                            <i class="ti ti-eye"></i>
-                                        </button>
-                                        <button class="btn-table-icon" title="Update status" @click="openStatusModal(booking)">
-                                            <i class="ti ti-refresh"></i>
-                                        </button>
-                                        <button class="btn-table-icon" :class="booking.isActive ? 'danger' : 'success'"
-                                            :title="booking.isActive ? 'Deactivate' : 'Reactivate'"
-                                            @click="toggleActive(booking)">
-                                            <i class="ti" :class="booking.isActive ? 'ti-toggle-left' : 'ti-toggle-right'"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
+            <div v-else class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Flight</th>
+                            <th>Booker</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Active</th>
+                            <th style="text-align:right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="booking in pagedItems" :key="booking._id" :class="{ 'row-inactive': !booking.isActive }">
+                            <td class="cell-mono">{{ booking.bookingReference }}</td>
+                            <td>
+                                <span v-if="flightCache[booking.flightId]" class="cell-highlight">
+                                    {{ flightCache[booking.flightId].flightNumber }}
+                                </span>
+                                <span v-else class="cell-muted">Loading…</span>
+                            </td>
+                            <td>
+                                <span v-if="booking.guestEmail" class="cell-muted">
+                                    <i class="ti ti-user"></i> {{ booking.guestEmail }}
+                                </span>
+                                <span v-else-if="booking.userId" class="cell-muted cell-mono" style="font-size:0.72rem;">
+                                    <i class="ti ti-user-check"></i> {{ String(booking.userId).substring(0, 12) }}…
+                                </span>
+                                <span v-else class="cell-muted">—</span>
+                            </td>
+                            <td class="cell-highlight">₱{{ Number(booking.totalAmount).toLocaleString() }}</td>
+                            <td>
+                                <span class="admin-badge" :class="getStatusMeta(booking.status).badgeClass">
+                                    <i class="ti" :class="getStatusMeta(booking.status).icon"></i>
+                                    {{ getStatusMeta(booking.status).label }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="admin-badge" :class="booking.isActive ? 'badge-active' : 'badge-inactive'">
+                                    {{ booking.isActive ? 'Active' : 'Inactive' }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="admin-actions-cell" style="justify-content:flex-end;">
+                                    <button class="btn-table-icon" title="View details" @click="openDetail(booking)">
+                                        <i class="ti ti-eye"></i>
+                                    </button>
+                                    <button class="btn-table-icon" title="Update status" @click="openStatusModal(booking)">
+                                        <i class="ti ti-refresh"></i>
+                                    </button>
+                                    <button class="btn-table-icon" :class="booking.isActive ? 'danger' : 'success'"
+                                        :title="booking.isActive ? 'Deactivate' : 'Reactivate'"
+                                        @click="toggleActive(booking)">
+                                        <i class="ti" :class="booking.isActive ? 'ti-toggle-left' : 'ti-toggle-right'"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
                 <AdminPagination
                     :current-page="currentPage"
                     :total-pages="totalPages"
                     :page-numbers="pageNumbers"
                     @go-to-page="goToPage"
                 />
-            </template>
+            </div>
         </div>
 
         <!-- Status Modal -->

@@ -11,10 +11,9 @@ const router = useRouter()
 const route = useRoute() 
 const globalStore = useGlobalStore()
 
-// 1. Detect route profiles
+// 1. Detect if we are on the checkout route
 const isCheckoutPage = computed(() => route.path.startsWith('/checkout'))
 const isMyBookingPage = computed(() => route.path.startsWith('/my-bookings'))
-const isAdminPage = computed(() => route.path.toLowerCase().includes('admin'))
 
 // ── Scroll state ───────────────────────────────────
 const isScrolled = ref(false)
@@ -57,17 +56,22 @@ function closeProfileMenu() {
 }
 
 function doLogout() {
+  // 1. Clear the physical browser storage
+  localStorage.removeItem('token');
+  localStorage.removeItem('isAdmin'); 
+
+  // 2. Clear your application state and close UI menus
   globalStore.getUserDetails(null)
   profileMenuOpen.value = false
+  
+  // 3. Redirect the user
   router.push({ name: 'Home' })
 }
 </script>
 
 
 <template>
-  <!-- Hides completely when on any admin sub-route views -->
   <nav
-    v-if="!isAdminPage"
     class="navbar navbar-expand-lg fixed-top"
     id="mainNav"
     :class="{ scrolled: isScrolled }"
@@ -100,14 +104,12 @@ function doLogout() {
         :class="{ 'show': isMenuOpen }"
       > 
 
-        <!-- MODE 1: ADMIN IS LOGGED IN (Only shows this link) -->
         <ul v-if="store.isAdmin" class="navbar-nav mx-auto gap-lg-2">
           <li class="nav-item">
-            <RouterLink class="nav-link admin-only-text" active-class="active" :to="{ name: 'AdminDashboard' }" @click="isMenuOpen = false">Admin Dashboard</RouterLink>
+            <RouterLink class="nav-link" active-class="active" :to="{ name: 'AdminDashboard' }" @click="isMenuOpen = false">Admin Dashboard</RouterLink>
           </li>          
         </ul>
 
-        <!-- MODE 2: USER / GUEST IS LOGGED IN (Shows standard links) -->
         <ul v-else class="navbar-nav mx-auto gap-lg-2">
           <li class="nav-item">
             <RouterLink class="nav-link" active-class="active" :to="{ name: 'Home' }" @click="isMenuOpen = false">Home</RouterLink>
@@ -180,7 +182,8 @@ function doLogout() {
 
 
 <style scoped>
-/* Logo image sizing */
+/* Logo image — sized for the navbar bar (component-scoped)
+   Use a distinct class to avoid colliding with global `.nav-logo` rules. */
 .nav-logo-img {
   height: 36px;
   width: auto;
@@ -188,54 +191,13 @@ function doLogout() {
   display: block;
 }
 
-/* 1. Hamburger button container cleanup */
-.navbar-toggler {
-  border: none;
-  padding: 4px 8px;
-  background: transparent;
-}
-
-.navbar-toggler:focus {
-  box-shadow: none;
-}
-
-/* 2. Crisp, visible line dimensions for the hamburger icon */
-.toggler-icon {
-  display: block;
-  width: 24px;         
-  height: 2px;         
-  background-color: #ffffff; 
-  margin: 5px 0;
-  transition: all 0.3s ease;
-}
-
-/* 3. Adapts lines to a dark color if the navbar becomes white on scroll */
-.scrolled .toggler-icon {
-  background-color: var(--text, #333333); 
-}
-
-/* Luxury gold text styling for single Admin view link */
-.admin-only-text {
-  color: #dfb76c !important; 
-  font-weight: 600 !important;
-  letter-spacing: 0.5px;
-}
-
-.admin-only-text:hover {
-  color: #f3d498 !important;
-}
-
 /* Responsive: mobile / tablet collapse layout */
 @media (max-width: 991.98px) {
-  .nav-inner { 
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px; 
-  }
+  .nav-inner { padding: 0 16px; }
 
+  /* Make the collapsed panel full-width and visually separated */
   .navbar-collapse {
-    background: var(--bg-60, #0a192f);
+    background: var(--bg-60);
     position: absolute;
     top: 70px;
     left: 0;
@@ -258,7 +220,7 @@ function doLogout() {
   .navbar-nav .nav-link {
     padding: 12px 14px !important;
     width: 100%;
-    color: var(--text, #ffffff) !important;
+    color: var(--text) !important;
     background: transparent;
     border-radius: 8px;
   }
@@ -284,5 +246,8 @@ function doLogout() {
   #mainNav { height: 64px; }
   .nav-logo-img { height: 30px; }
   .nav-inner { padding: 0 12px; }
+  .toggler-icon { display: block; width: 10%; height: 1.5px; background: #ffffff; margin: 4px 0; }
 }
+
 </style>
+

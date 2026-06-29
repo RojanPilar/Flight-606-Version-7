@@ -45,7 +45,7 @@ import { onMounted, ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useBookingStore } from '../stores/booking';
 import { Notyf } from 'notyf';
-import { getFlightById, getSeatsByFlight, getMyPassengers, getAirportById } from '../api.js';
+import { getFlightById, getSeatsByFlight, getMyPassengers } from '../api.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -59,8 +59,6 @@ const seatsMap = ref({});
 const isLoading = ref(true);
 const errorMessage = ref('');
 const savedPassengers = ref([]);
-// Airport cache: { [airportId]: airportObject }
-const airportCache = ref({});
 
 const activeLegIndex = ref(0);
 const activePassengerIndex = ref(0);
@@ -76,37 +74,6 @@ function toggleSection(key) {
     const i = closedSections.value.indexOf(key);
     if (i > -1) closedSections.value.splice(i, 1);
     else closedSections.value.push(key);
-}
-
-// ── Airport resolution ─────────────────────────────────────────────────────
-// Always stringify IDs — MongoDB can return ObjectId objects, not plain strings,
-// which causes cache key mismatches (objectA !== objectA.toString()).
-async function fetchAirport(rawId) {
-    const id = rawId ? String(rawId) : null;
-    if (!id) return null;
-    if (airportCache.value[id]) return airportCache.value[id];
-    try {
-        const res = await getAirportById(id);
-        // api.js wraps response: { message, result: { airport } }
-        const airport = res.result ?? res ?? null;
-        if (airport && airport.iataCode) airportCache.value[id] = airport;
-        return airport;
-    } catch { return null; }
-}
-
-function airportLabel(rawId) {
-    const id = rawId ? String(rawId) : null;
-    const a = airportCache.value[id];
-    if (!a) return id ? '…' : '—';
-    return a.iataCode ? `${a.iataCode}` : (a.city || a.name || '—');
-}
-
-// Full label with city name — used in Selected Flights card
-function airportFullLabel(rawId) {
-    const id = rawId ? String(rawId) : null;
-    const a = airportCache.value[id];
-    if (!a) return id ? '…' : '—';
-    return a.city ? `${a.city} (${a.iataCode})` : (a.iataCode || '—');
 }
 
 onMounted(async () => {
@@ -142,16 +109,6 @@ onMounted(async () => {
                     bookingStore.legs[i].seats = seatsMap.value[flightIds[i]] || [];
                 }
             }
-
-            // Fetch all unique airports used across all flights.
-            // String() ensures ObjectId objects don't create duplicate cache keys.
-            const airportIds = new Set();
-            for (const f of flightsCollector) {
-                if (f.originAirportId)      airportIds.add(String(f.originAirportId));
-                if (f.destinationAirportId) airportIds.add(String(f.destinationAirportId));
-            }
-            await Promise.allSettled([...airportIds].map(fetchAirport));
-
         } else {
             errorMessage.value = 'Failed to load flight details. Please try again.';
         }
@@ -315,31 +272,15 @@ function validateAndContinue() {
     router.push({ name: 'ConfirmPayment' });
 }
 
-// ── Leg label ──────────────────────────────────────────────────────────────
 function legLabel(flight, i) {
     if (!flight) return 'Flight';
-    const origin = airportFullLabel(flight.originAirportId);
-    const dest   = airportFullLabel(flight.destinationAirportId);
+    const origin = flight.originAirportId?.iataCode || 'DEP';
+    const dest   = flight.destinationAirportId?.iataCode || 'ARR';
     const dateLabel = flight.departureTime
         ? new Date(flight.departureTime).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
         : '';
-    const prefix = flightsMap.value.length > 1
-        ? (i === 0 ? 'Departure Flight · ' : 'Return Flight · ')
-        : '';
+    const prefix = flightsMap.value.length > 1 ? (i === 0 ? 'Outbound · ' : 'Return · ') : '';
     return `${prefix}${origin} → ${dest} · ${dateLabel} · ${flight.flightNumber || ''}`;
-}
-
-// Short label for leg tab buttons
-function legTabLabel(flight, i) {
-    if (!flight) return `Flight ${i + 1}`;
-    const originId = String(flight.originAirportId || '');
-    const destId   = String(flight.destinationAirportId || '');
-    const origin = airportCache.value[originId]?.iataCode || '???';
-    const dest   = airportCache.value[destId]?.iataCode   || '???';
-    const prefix = flightsMap.value.length > 1
-        ? (i === 0 ? 'Departure' : 'Return')
-        : flight.flightNumber || `Flight ${i + 1}`;
-    return flightsMap.value.length > 1 ? `${prefix}: ${origin} → ${dest}` : prefix;
 }
 
 function routerBack() {
@@ -348,11 +289,20 @@ function routerBack() {
 </script>
 
 <template>
+    <!--
+        FIX 1: Replaced `bg-light min-vh-100` with `booking-page` (scoped).
+        Bootstrap's bg-light is hardcoded to #f8f9fa — it ignores var(--bg-60).
+    -->
     <div class="booking-page">
         <div class="container py-5">
 
             <div v-if="isLoading" class="text-center py-5">
                 <div class="spinner-border bf-text-gold" role="status"></div>
+                <!--
+                    FIX 2: `text-muted` resolves to Bootstrap's #6c757d.
+                    In dark theme that's a mid-grey on near-black — low contrast.
+                    Replaced with bf-text-muted which uses var(--muted).
+                -->
                 <p class="mt-3 fw-bold bf-text-muted">Loading your flight details…</p>
             </div>
 
@@ -378,10 +328,18 @@ function routerBack() {
 
                     <!-- Selected Flights card -->
                     <div class="card bf-card shadow-sm border-0 mb-4">
+                        <!--
+                            FIX 4: `bg-primary text-white` is Bootstrap blue + hardcoded white.
+                            Replaced with bf-card-header--primary which uses the gold token system.
+                        -->
                         <div class="bf-card-header--primary py-3 px-3">
                             <h5 class="mb-0"><i class="bi bi-airplane me-2"></i> Selected Flights</h5>
                         </div>
                         <div class="bf-card-body">
+                            <!--
+                                FIX 5: `fw-bold text-dark` would go jet-black in dark mode.
+                                Replaced with bf-text-main → var(--text).
+                            -->
                             <div v-for="(flight, i) in flightsMap" :key="i" class="fw-bold bf-text-main py-1">
                                 {{ legLabel(flight, i) }}
                             </div>
@@ -390,6 +348,11 @@ function routerBack() {
 
                     <!-- Passenger Forms (Accordion) -->
                     <div v-for="(p, pIdx) in bookingStore.passengers" :key="pIdx" class="card bf-card shadow-sm border-0 mb-4">
+                        <!--
+                            FIX 6: `bg-white` is hardcoded white — the accordion header
+                            stays white even in dark theme, making it flash against the dark page.
+                            Replaced with bf-card-header--plain → var(--bg-60-surface).
+                        -->
                         <div
                             class="bf-card-header--plain d-flex justify-content-between align-items-center py-3 px-3"
                             style="cursor: pointer;"
@@ -398,6 +361,10 @@ function routerBack() {
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-person-badge fs-4 bf-text-gold me-3"></i>
                                 <div>
+                                    <!--
+                                        FIX 7: Plain `<h6>` inherits Bootstrap body color.
+                                        Explicitly set bf-text-main so it adapts to theme.
+                                    -->
                                     <h6 class="mb-0 fw-bold bf-text-main">Passenger {{ pIdx + 1 }}</h6>
                                     <small class="bf-text-muted">Personal &amp; passport details</small>
                                 </div>
@@ -405,8 +372,17 @@ function routerBack() {
                             <i :class="isOpen(pIdx) ? 'bi bi-chevron-up' : 'bi bi-chevron-down'" class="bf-text-muted"></i>
                         </div>
 
+                        <!--
+                            FIX 8: `card-body bg-light` forces Bootstrap's #f8f9fa.
+                            Replaced with bf-card-body → var(--bg-60-surface).
+                        -->
                         <div class="bf-card-body bf-card-body--alt border-top" v-if="isOpen(pIdx)">
                             <div v-if="savedPassengers.length > 0" class="mb-4">
+                                <!--
+                                    FIX 9: `text-primary` resolves to Bootstrap blue (#0d6efd).
+                                    In dark mode that can disappear on dark surfaces.
+                                    Replaced with bf-text-gold which uses var(--gold).
+                                -->
                                 <label class="form-label small fw-bold bf-text-gold">Autofill from saved profile</label>
                                 <select class="form-select bf-select" @change="applySaved(pIdx, $event.target.value)">
                                     <option value="">— Select —</option>
@@ -418,6 +394,11 @@ function routerBack() {
 
                             <div class="row g-3">
                                 <div class="col-md-6">
+                                    <!--
+                                        FIX 10: All form labels get bf-text-main so they're
+                                        readable in both themes. Bootstrap's default label color
+                                        (#212529) is invisible on dark backgrounds.
+                                    -->
                                     <label class="form-label small fw-bold bf-text-main">First Name</label>
                                     <input type="text" class="form-control bf-input" v-model="p.firstName" required>
                                 </div>
@@ -476,7 +457,6 @@ function routerBack() {
 
                         <div class="bf-card-body p-4" v-if="isOpen('seats')">
 
-                            <!-- Leg tabs: "Departure: HND → MNL" / "Return: MNL → HND" -->
                             <div class="d-flex gap-2 mb-4 overflow-auto">
                                 <button
                                     v-for="(flight, i) in flightsMap"
@@ -485,43 +465,42 @@ function routerBack() {
                                     :class="activeLegIndex === i ? 'btn-primary' : 'btn-outline-secondary'"
                                     @click="activeLegIndex = i; activePassengerIndex = bookingStore.legs?.[i]?.selectedSeatIds?.findIndex(id => !id) ?? 0; activePassengerIndex = activePassengerIndex < 0 ? passengerCount - 1 : activePassengerIndex"
                                 >
-                                    {{ legTabLabel(flight, i) }}
-                                    <i
-                                        v-if="bookingStore.legs?.[i]?.selectedSeatIds?.every(id => !!id) && bookingStore.legs?.[i]?.selectedSeatIds?.length === passengerCount"
-                                        class="bi bi-check-circle-fill text-warning ms-1"
-                                    ></i>
+                                    Leg {{ i + 1 }}: {{ flight.flightNumber }}
+                                    <i v-if="bookingStore.legs?.[i]?.selectedSeatIds?.every(id => !!id) && bookingStore.legs?.[i]?.selectedSeatIds?.length === passengerCount" class="bi bi-check-circle-fill text-warning ms-1"></i>
                                 </button>
                             </div>
 
-                            <!-- Passenger status strip: numbered 1, 2, 3 (no "Pax" prefix) -->
-                            <div class="d-flex align-items-center gap-2 mb-4 pb-3 border-bottom flex-wrap">
-                                <span class="bf-text-muted small me-1">Assigning seats:</span>
+                            <!-- Passenger status strip -->
+                            <div class="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom flex-wrap">
                                 <div
                                     v-for="(p, i) in bookingStore.passengers"
                                     :key="i"
-                                    class="d-flex align-items-center gap-1 px-3 py-2 rounded"
+                                    class="d-flex align-items-center gap-2 px-3 py-2 rounded"
                                     :class="i === activePassengerIndex
                                         ? 'bg-success text-white fw-bold'
-                                        : bookingStore.legs?.[activeLegIndex]?.selectedSeatIds?.[i]
+                                        : ownerOf(activeLegIndex, bookingStore.legs?.[activeLegIndex]?.selectedSeatIds?.[i]) > -1 || bookingStore.legs?.[activeLegIndex]?.selectedSeatIds?.[i]
                                             ? 'bf-pax-done'
                                             : 'bf-pax-pending'"
-                                    style="font-size: 0.85rem; min-width: 2.5rem; justify-content: center;"
+                                    style="font-size: 0.85rem;"
                                 >
                                     <i
-                                        class="bi me-1"
+                                        class="bi"
                                         :class="bookingStore.legs?.[activeLegIndex]?.selectedSeatIds?.[i]
                                             ? 'bi-check-circle-fill'
                                             : i === activePassengerIndex ? 'bi-cursor-fill' : 'bi-circle'"
                                     ></i>
-                                    <!-- Number only: 1, 2, 3 -->
-                                    {{ i + 1 }}
+                                    Pax {{ i + 1 }}
                                     <span v-if="bookingStore.legs?.[activeLegIndex]?.selectedSeatIds?.[i]" class="ms-1 small opacity-75">
-                                        {{ seatsMap[currentFlightId]?.find(s => s._id === bookingStore.legs[activeLegIndex].selectedSeatIds[i])?.seatNumber || '' }}
+                                        · {{ seatsMap[currentFlightId]?.find(s => s._id === bookingStore.legs[activeLegIndex].selectedSeatIds[i])?.seatNumber || '—' }}
                                     </span>
-                                    <span v-else-if="i === activePassengerIndex" class="ms-1 small opacity-75">←</span>
+                                    <span v-else-if="i === activePassengerIndex" class="ms-1 small opacity-75">← pick a seat</span>
                                 </div>
                             </div>
 
+                            <!--
+                                FIX 11: `bg-light rounded border` forces Bootstrap's #f8f9fa.
+                                Replaced with bf-seatmap-bg which uses var(--bg-60-surface).
+                            -->
                             <div class="bf-seatmap-bg text-center p-3 rounded">
 
                                 <!-- Column headers -->
@@ -619,6 +598,15 @@ function routerBack() {
                 <!-- ── Booking Summary sidebar ──────────────────── -->
                 <div class="col-lg-4">
                     <div class="card bf-card shadow-sm border-0 position-sticky" style="top: 5rem;">
+                        <!--
+                            FIX 12 (THE BIG ONE): `bg-dark text-white` is completely
+                            hardcoded — always renders as a black header with white text,
+                            clashing badly against a white page in light mode.
+                            Replaced with bf-card-header--dark which uses:
+                              background: var(--bg-60-surface)  → black in dark, #EEE in light
+                              color:      var(--text)           → white in dark, black in light
+                              border-bottom: 1px solid var(--border)
+                        -->
                         <div class="bf-card-header--dark py-3 px-3">
                             <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> Booking Summary</h5>
                         </div>
@@ -628,11 +616,12 @@ function routerBack() {
                             </div>
 
                             <div v-for="flight in flightsMap" :key="flight._id" class="mb-3">
+                                <!--
+                                    FIX 13: `text-primary text-uppercase` resolves to Bootstrap
+                                    blue — not your gold token. Replaced with bf-text-gold.
+                                -->
                                 <div class="fw-bold small bf-text-gold text-uppercase mb-1">
                                     {{ flight.flightNumber }}
-                                    <span class="bf-text-muted fw-normal text-lowercase ms-1" style="font-size:0.75rem;">
-                                        {{ airportLabel(flight.originAirportId) }} → {{ airportLabel(flight.destinationAirportId) }}
-                                    </span>
                                 </div>
                                 <div
                                     v-for="(seat, pIdx) in (selectedSeats[flight._id] || [])"
@@ -640,13 +629,16 @@ function routerBack() {
                                     class="d-flex justify-content-between align-items-center my-1 ms-1"
                                 >
                                     <span class="small bf-text-muted">
-                                        <!-- Number only: 1, 2, 3 -->
-                                        {{ pIdx + 1 }} · Seat {{ seat.seatNumber }}
+                                        Pax {{ pIdx + 1 }} · Seat {{ seat.seatNumber }}
                                         <span
                                             class="badge ms-1"
                                             :class="seat.class === 'business' ? 'bg-warning text-dark' : 'bg-success'"
                                         >{{ seat.class }}</span>
                                     </span>
+                                    <!--
+                                        FIX 14: `fw-bold small text-dark` → invisible on dark bg.
+                                        Replaced with bf-text-main → var(--text).
+                                    -->
                                     <span class="fw-bold small bf-text-main">
                                         ₱{{ getSeatPrice(flight, seat).toLocaleString() }}
                                     </span>
@@ -658,6 +650,13 @@ function routerBack() {
 
                             <div class="d-flex justify-content-between align-items-center pt-3 mt-2 border-top">
                                 <h5 class="fw-bold mb-0 bf-text-main">Total</h5>
+                                <!--
+                                    FIX 15: `text-success fw-bold` → Bootstrap's green (#198754).
+                                    In light mode against white it's barely passing contrast;
+                                    in dark mode on very dark surfaces it can disappear.
+                                    Replaced with bf-text-success → var(--success) which is
+                                    properly calibrated per-theme in style.css.
+                                -->
                                 <h4 class="bf-text-success fw-bold mb-0">
                                     ₱{{ grandTotalValue.toLocaleString() }}
                                 </h4>
@@ -672,27 +671,56 @@ function routerBack() {
 </template>
 
 <style scoped>
+/* ══════════════════════════════════════════════════════════════
+   BookFlightPage scoped tokens
+   All colors come from the global design token system (style.css).
+   No hardcoded hex values — every property references a CSS variable
+   so both light and dark themes are handled automatically.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Page wrapper ─────────────────────────────────────────────
+   Replaces Bootstrap's `bg-light` which is hardcoded to #f8f9fa.
+*/
 .booking-page {
     background: var(--bg-60);
     min-height: 100vh;
     transition: var(--theme-transition);
 }
+
+/* ── Cards ────────────────────────────────────────────────────
+   Replaces Bootstrap's `.card` white background with a token-driven
+   surface so cards look correct on both dark and light page backgrounds.
+*/
 .bf-card {
     background: var(--bg-60-surface) !important;
     border: 1px solid var(--border-dim) !important;
     transition: var(--theme-transition);
 }
+
+/* ── Card headers ─────────────────────────────────────────────
+   Three semantic variants replacing Bootstrap's hardcoded color classes.
+*/
+
+/* Primary header: uses gold accent (was `bg-primary text-white`) */
 .bf-card-header--primary {
     background: var(--gold-dim);
     border-bottom: 1px solid var(--border);
     color: var(--gold);
     font-family: var(--font-sans);
 }
+
+/* Plain header: neutral surface (was `bg-white`) */
 .bf-card-header--plain {
     background: var(--bg-60-surface);
     border-bottom: 1px solid var(--border-dim);
     transition: var(--theme-transition);
 }
+
+/* Dark header: inverted surface (was `bg-dark text-white`) —
+   This is the Booking Summary header that was the main offender.
+   In dark theme: near-black bg, white text.
+   In light theme: #EEEEEE bg, near-black text.
+   Both pass WCAG AA contrast. */
 .bf-card-header--dark {
     background: var(--bg-60-mid);
     border-bottom: 1px solid var(--border);
@@ -700,18 +728,35 @@ function routerBack() {
     font-family: var(--font-sans);
     transition: var(--theme-transition);
 }
+
+/* ── Card body ────────────────────────────────────────────────
+   Replaces `card-body bg-light` which forced Bootstrap's #f8f9fa.
+*/
 .bf-card-body {
     background: var(--bg-60-surface);
     padding: 1.25rem;
     transition: var(--theme-transition);
 }
+
+/* Slightly recessed body for accordion passenger forms */
 .bf-card-body--alt {
     background: var(--bg-60-mid);
 }
+
+/* ── Text utilities (token-driven replacements) ────────────────
+   These replace Bootstrap's `text-*` classes which resolve to
+   Bootstrap's own color scale, not your design tokens.
+*/
 .bf-text-main    { color: var(--text) !important; }
 .bf-text-muted   { color: var(--muted) !important; }
 .bf-text-gold    { color: var(--gold) !important; }
 .bf-text-success { color: var(--success) !important; }
+
+/* ── Form controls ────────────────────────────────────────────
+   Bootstrap's `.form-control` and `.form-select` default to white
+   background and near-black text. In dark theme this creates a
+   jarring bright-white box on a dark surface.
+*/
 .bf-input,
 .bf-select {
     background: var(--glass-bg-lt) !important;
@@ -719,6 +764,7 @@ function routerBack() {
     color: var(--text) !important;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
+
 .bf-input:focus,
 .bf-select:focus {
     background: var(--gold-dim) !important;
@@ -726,21 +772,33 @@ function routerBack() {
     color: var(--text) !important;
     box-shadow: 0 0 0 0.15rem var(--accent-30-dim) !important;
 }
+
 .bf-input::placeholder { color: var(--muted) !important; }
+
 .bf-select option {
     background: var(--bg-60-mid);
     color: var(--text);
 }
+
+/* ── Seat map container ───────────────────────────────────────
+   Replaces Bootstrap's `bg-light` which is hardcoded.
+*/
 .bf-seatmap-bg {
     background: var(--bg-60-mid);
     border: 1px solid var(--border-dim);
     transition: var(--theme-transition);
 }
+
+/* ── Passenger status strip pills ────────────────────────────
+   Replaces `bg-light text-success border border-success` and
+   `bg-light text-muted border` which both hardcode light backgrounds.
+*/
 .bf-pax-done {
     background: var(--gold-dim);
     color: var(--success);
     border: 1px solid var(--success);
 }
+
 .bf-pax-pending {
     background: var(--bg-60-mid);
     color: var(--muted);

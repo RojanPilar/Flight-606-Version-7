@@ -2,9 +2,7 @@ import axios from "axios";
 
 const api = axios.create({
     // 1. Clean up potential missing trailing slashes dynamically
-    // Updated fallback to use your new active testing URL
-    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://flight-606-booking-system.onrender.com",
-    
+    baseURL: import.meta.env.VITE_FLIGHT_606_API || "https://flight606.onrender.com",
     // 2. Enable credentials to allow cookie/session tracking if needed
     withCredentials: true 
 });

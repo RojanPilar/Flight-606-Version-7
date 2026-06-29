@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useGlobalStore } from '../stores/global.js'
-import { getBookingByReference, checkInBookingUser, checkInBookingGuest, getFlightById, getAirportById } from '../api.js'
+import { getBookingByReference, checkInBookingUser, checkInBookingGuest } from '../api.js'
 
 const route = useRoute()
 const globalStore = useGlobalStore()
@@ -11,9 +11,6 @@ const isLoggedIn = computed(() => !!globalStore.user.token)
 const bookingReference = ref(route.query.ref || '')
 const guestEmail = ref('')
 const booking = ref(null)
-const flight = ref(null)
-const originAirport = ref(null)
-const destinationAirport = ref(null)
 const step = ref('lookup') // 'lookup' | 'found' | 'done'
 const loading = ref(false)
 const errorMsg = ref('')
@@ -29,9 +26,6 @@ function formatDateTime(dt) {
 async function lookupBooking() {
   errorMsg.value = ''
   booking.value = null
-  flight.value = null
-  originAirport.value = null
-  destinationAirport.value = null
   if (!bookingReference.value.trim()) {
     errorMsg.value = 'Please enter your booking reference.'
     return
@@ -40,23 +34,6 @@ async function lookupBooking() {
   try {
     const res = await getBookingByReference(bookingReference.value.trim())
     booking.value = res.result
-
-    // flightId comes back as a raw ID string — fetch the full flight + airports
-    if (booking.value.flightId) {
-      try {
-        const flightRes = await getFlightById(booking.value.flightId)
-        flight.value = flightRes?.result ?? null
-        if (flight.value) {
-          const [originRes, destRes] = await Promise.allSettled([
-            getAirportById(flight.value.originAirportId),
-            getAirportById(flight.value.destinationAirportId)
-          ])
-          if (originRes.status === 'fulfilled') originAirport.value = originRes.value?.result ?? null
-          if (destRes.status === 'fulfilled')   destinationAirport.value = destRes.value?.result ?? null
-        }
-      } catch { /* non-fatal — airport names will fall back to — */ }
-    }
-
     if (booking.value.checkedIn) {
       errorMsg.value = 'This booking is already checked in.'
     } else if (booking.value.status !== 'confirmed') {
@@ -135,20 +112,16 @@ onMounted(() => {
 
             <div v-if="booking && step === 'found'" class="flight-card mt-4" style="cursor:default;">
               <div class="fc-endpoint">
-                <div class="fc-time">{{ formatDateTime(flight?.departureTime) }}</div>
-                <div class="fc-airport">{{ originAirport?.iataCode || '—' }}
-                  <span class="d-block" style="font-size:0.75rem; opacity:0.7;">{{ originAirport?.city || '' }}</span>
-                </div>
+                <div class="fc-time">{{ formatDateTime(booking.flightId?.departureTime) }}</div>
+                <div class="fc-airport">{{ booking.flightId?.originAirportId?.city || booking.flightId?.originAirportId?.iataCode || 'DEP' }}</div>
               </div>
               <div class="fc-mid">
                 <div class="fc-line"><span class="fc-plane-icon"><i class="bi bi-airplane-fill"></i></span></div>
-                <div class="fc-stops">{{ flight?.flightNumber }}</div>
+                <div class="fc-stops">{{ booking.flightId?.flightNumber }}</div>
               </div>
               <div class="fc-endpoint">
-                <div class="fc-time">{{ formatDateTime(flight?.arrivalTime) }}</div>
-                <div class="fc-airport">{{ destinationAirport?.iataCode || '—' }}
-                  <span class="d-block" style="font-size:0.75rem; opacity:0.7;">{{ destinationAirport?.city || '' }}</span>
-                </div>
+                <div class="fc-time">{{ formatDateTime(booking.flightId?.arrivalTime) }}</div>
+                <div class="fc-airport">{{ booking.flightId?.destinationAirportId?.city || booking.flightId?.destinationAirportId?.iataCode || 'ARR' }}</div>
               </div>
               <div class="fc-price-box">
                 <span class="fc-badge success">Confirmed</span>
@@ -162,8 +135,8 @@ onMounted(() => {
               <div class="success-icon">✓</div>
               <h1 class="success-title">You're checked in!</h1>
               <p class="success-sub">
-                {{ flight?.flightNumber }} — {{ originAirport?.iataCode || 'DEP' }} → {{ destinationAirport?.iataCode || 'ARR' }}<br>
-                Departs {{ formatDateTime(flight?.departureTime) }}
+                {{ booking.flightId?.flightNumber }} — {{ booking.flightId?.originAirportId?.iataCode || 'DEP' }} → {{ booking.flightId?.destinationAirportId?.iataCode || 'ARR' }}<br>
+                Departs {{ formatDateTime(booking.flightId?.departureTime) }}
               </p>
               <p class="success-note">Please arrive at the airport at least 2 hours before departure with a valid ID and your booking reference: <strong>{{ booking.bookingReference }}</strong></p>
               <div class="success-actions">

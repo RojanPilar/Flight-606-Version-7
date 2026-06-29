@@ -1,10 +1,13 @@
 <script setup>
-import { ref, provide, onMounted } from 'vue'
+import { ref, provide, onMounted, computed } from 'vue'
 import { useGlobalStore } from './stores/global.js'
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 
 const globalStore = useGlobalStore()
+
+// Hide navbar for admin users
+const showNavbar = computed(() => !globalStore.isAdmin)
 
 // ── Theme ──────────────────────────────────────────
 const theme = ref(localStorage.getItem('f606-theme') || 'dark')
@@ -31,7 +34,7 @@ onMounted(() => {
 
 <template>
   <div :data-theme="theme">
-    <Navbar />
+    <Navbar v-if="showNavbar" />
     <RouterView />
     <Footer />
   </div>

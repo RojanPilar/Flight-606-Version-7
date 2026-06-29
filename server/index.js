@@ -19,17 +19,10 @@ const notificationRoutes = require("./routes/notification");
 const seatRoutes = require("./routes/seat");
 const cors = require('cors');
 const corsOptions = {
-    origin: [
-        "http://localhost:5173", 
-        "http://localhost:8000", 
-        "https://flight-606-version-7.vercel.app"
-    ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], // Add this line
-    allowedHeaders: ["Content-Type", "Authorization"],              // Add this line
+    origin: ["http://localhost:5173", "http://localhost:8000", "https://flight-606-booking-system.vercel.app"],
     credentials: true,
     optionsSuccessStatus: 200
 };
-
 
 // APP INITIALIZATION 
 const app = express();

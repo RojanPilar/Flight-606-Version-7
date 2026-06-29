@@ -26,7 +26,7 @@ const errorMsg        = ref('')
 const guestEmailInput = ref('')
 const cancellingRef   = ref('')
 
-// ── Expanded detail panels ─────────────────────────────────────────────────
+// ── Expanded detail panels (Set of booking._id) ────────────────────────────
 const openDetails = ref(new Set())
 
 function toggleDetails(id) {
@@ -36,7 +36,6 @@ function toggleDetails(id) {
 }
 
 // ── Rebook modal state ─────────────────────────────────────────────────────
-// step: 'confirm' | 'search' | null
 const rebookStep        = ref(null)
 const rebookTarget      = ref(null)
 const rebookDate        = ref('')
@@ -63,7 +62,9 @@ function openRebookModal(booking) {
   selectedSeatId.value   = ''
 }
 
-function proceedToSearch() { rebookStep.value = 'search' }
+function proceedToSearch() {
+  rebookStep.value = 'search'
+}
 
 function closeRebookModal() {
   if (rebookSubmitting.value) return
@@ -85,8 +86,9 @@ async function searchRebookFlights() {
     const dest   = b.flightId?.destinationAirportId?._id || b.flightId?.destinationAirportId
     const res    = await searchFlights(origin, dest, rebookDate.value)
     rebookFlights.value = res?.result || res?.flights || (Array.isArray(res) ? res : [])
-    if (rebookFlights.value.length === 0)
-      rebookError.value = 'No flights available on that date for this route.'
+    if (rebookFlights.value.length === 0) {
+      rebookError.value = 'No flights found on that date for this route.'
+    }
   } catch (err) {
     rebookError.value = err.response?.data?.message || 'Could not fetch available flights.'
   } finally {
@@ -129,29 +131,42 @@ async function confirmRebook() {
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Formatters ─────────────────────────────────────────────────────────────
 function formatTime(dt) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' })
+  return new Date(dt).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit'
+  })
 }
 function formatDateLabel(dt) {
   if (!dt) return ''
-  return new Date(dt).toLocaleDateString('en-PH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(dt).toLocaleDateString('en-PH', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+  })
 }
 function formatTimeOnly(dt) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' })
+  return new Date(dt).toLocaleTimeString('en-PH', {
+    timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit'
+  })
 }
 function calcTravelTime(departure, arrival) {
   if (!departure || !arrival) return ''
   const diff = new Date(arrival) - new Date(departure)
   if (diff <= 0) return ''
-  return `${Math.floor(diff / 3600000)}h ${Math.floor((diff % 3600000) / 60000)}m`
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  return `${h}h ${m}m`
 }
 function statusBadgeClass(status) {
   if (status === 'cancelled') return 'fc-badge cancelled'
   if (status === 'pending')   return 'fc-badge pending'
   return 'fc-badge success'
+}
+function statusIcon(status) {
+  if (status === 'cancelled') return 'bi-x-circle-fill'
+  if (status === 'pending')   return 'bi-clock-fill'
+  return 'bi-check-circle-fill'
 }
 function seatClassLabel(cls) {
   if (!cls) return ''
@@ -162,72 +177,106 @@ function isUpcoming(booking) {
   return dep ? new Date(dep) > new Date() : true
 }
 
-// ── Enrich a single booking with passenger + seat data ────────────────────
+// ── Enrich a single booking ────────────────────────────────────────────────
 async function enrichBooking(b, passengerMap = new Map()) {
   try {
     const bkpRes = await getPassengersByBooking(b._id)
     const bkp    = bkpRes?.result?.find(r => r.isActive) ?? bkpRes?.result?.[0]
     if (!bkp) return b
+
     b.ticketNumber = bkp.ticketNumber ?? null
+
     const passengerId = bkp.passengerId?._id
       ? String(bkp.passengerId._id)
-      : bkp.passengerId ? String(bkp.passengerId) : null
+      : bkp.passengerId
+        ? String(bkp.passengerId)
+        : null
+
     if (passengerId) {
       let passenger = passengerMap.get(passengerId) ?? null
       if (!passenger) {
-        try { const pRes = await getPassengerById(passengerId); passenger = pRes?.result ?? null } catch {}
+        try {
+          const pRes = await getPassengerById(passengerId)
+          passenger  = pRes?.result ?? null
+        } catch { /* leave null */ }
       }
-      if (passenger) b.passengerName = [passenger.firstName, passenger.lastName].filter(Boolean).join(' ') || null
+      if (passenger) {
+        b.passengerName = [passenger.firstName, passenger.lastName]
+          .filter(Boolean).join(' ') || null
+      }
     }
+
     if (bkp.seatId) {
-      try { const seatRes = await getSeatById(bkp.seatId); b.seat = seatRes?.result ?? null } catch { b.seat = null }
+      try {
+        const seatRes = await getSeatById(bkp.seatId)
+        b.seat = seatRes?.result ?? null
+      } catch { b.seat = null }
     }
-  } catch {}
+  } catch { /* silent */ }
   return b
 }
 
 // ── Load bookings ──────────────────────────────────────────────────────────
 async function loadBookings() {
-  loading.value = true; errorMsg.value = ''; openDetails.value = new Set()
+  loading.value     = true
+  errorMsg.value    = ''
+  openDetails.value = new Set()
   try {
     const res = await getMyBookingsUser()
     const raw = res?.bookings || res?.result || (Array.isArray(res) ? res : [])
+
     const passengerMap = new Map()
     try {
       const pRes = await getMyPassengers()
-      for (const p of pRes?.passengers ?? pRes?.result ?? []) passengerMap.set(String(p._id), p)
-    } catch {}
+      for (const p of pRes?.passengers ?? pRes?.result ?? []) {
+        passengerMap.set(String(p._id), p)
+      }
+    } catch { /* map stays empty */ }
+
     bookings.value = await Promise.all(raw.map(b => enrichBooking(b, passengerMap)))
   } catch (err) {
-    if (err.response?.status === 404) bookings.value = []
-    else errorMsg.value = err.response?.data?.message || 'Could not load your bookings right now.'
+    if (err.response?.status === 404) {
+      bookings.value = []
+    } else {
+      errorMsg.value = err.response?.data?.message || 'Could not load your bookings right now.'
+    }
   } finally {
-    loading.value = false; hasSearched.value = true
+    loading.value     = false
+    hasSearched.value = true
   }
 }
 
 async function lookupGuestBookings() {
   if (!guestEmailInput.value || !guestEmailInput.value.includes('@')) {
-    errorMsg.value = 'Please enter a valid email address.'; return
+    errorMsg.value = 'Please enter a valid email address.'
+    return
   }
-  loading.value = true; errorMsg.value = ''; openDetails.value = new Set()
+  loading.value     = true
+  errorMsg.value    = ''
+  openDetails.value = new Set()
   try {
-    const res      = await getMyBookingsGuest({ guestEmail: guestEmailInput.value })
+    const res = await getMyBookingsGuest({ guestEmail: guestEmailInput.value })
     const raw      = res?.result || res?.data || (Array.isArray(res) ? res : [])
     bookings.value = await Promise.all(raw.map(b => enrichBooking(b, new Map())))
   } catch (err) {
-    bookings.value = []; errorMsg.value = err.response?.data?.message || 'No bookings found for that email.'
+    bookings.value = []
+    errorMsg.value = err.response?.data?.message || 'No bookings found for that email.'
   } finally {
-    loading.value = false; hasSearched.value = true
+    loading.value     = false
+    hasSearched.value = true
   }
 }
 
 async function cancelBooking(booking) {
   if (!window.confirm(`Cancel booking ${booking.bookingReference}? This cannot be undone.`)) return
-  cancellingRef.value = booking.bookingReference; errorMsg.value = ''
+  cancellingRef.value = booking.bookingReference
+  errorMsg.value      = ''
   try {
-    if (isLoggedIn.value) await cancelBookingUser(booking.bookingReference)
-    else await cancelBookingGuest(booking.bookingReference, { guestEmail: guestEmailInput.value })
+    if (isLoggedIn.value) {
+      await cancelBookingUser(booking.bookingReference)
+    } else {
+      await cancelBookingGuest(booking.bookingReference, { guestEmail: guestEmailInput.value })
+    }
     booking.status = 'cancelled'
   } catch (err) {
     errorMsg.value = err.response?.data?.message || 'Could not cancel this booking.'
@@ -236,193 +285,274 @@ async function cancelBooking(booking) {
   }
 }
 
-onMounted(() => { if (isLoggedIn.value) loadBookings() })
+onMounted(() => {
+  if (isLoggedIn.value) loadBookings()
+})
 </script>
 
 <template>
   <div class="page active">
     <div class="inner-page">
-      <div class="bk-page-wrap">
-        <div class="container bk-container">
+      <div class="bk-page-wrapper">
+        <div class="bk-container">
 
+          <!-- Breadcrumb -->
           <nav class="theme-breadcrumb" aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
-              <li class="breadcrumb-item"><RouterLink :to="{ name: 'Home' }">Home</RouterLink></li>
+              <li class="breadcrumb-item">
+                <RouterLink :to="{ name: 'Home' }">Home</RouterLink>
+              </li>
               <li class="breadcrumb-item active">My Bookings</li>
             </ol>
           </nav>
 
-          <h1 class="confirm-headline mb-4">My <em class="gold">Bookings</em></h1>
+          <!-- Page header -->
+          <div class="bk-page-header">
+            <div>
+              <h1 class="bk-page-title">My <em class="gold">Bookings</em></h1>
+              <p class="bk-page-sub">Manage, rebook, or cancel your upcoming flights.</p>
+            </div>
+            <div v-if="bookings.length > 0" class="bk-booking-count">
+              <span class="bk-count-num">{{ bookings.length }}</span>
+              <span class="bk-count-label">{{ bookings.length === 1 ? 'booking' : 'bookings' }}</span>
+            </div>
+          </div>
 
-          <!-- ── Guest lookup ───────────────────────────────────────────── -->
-          <div v-if="!isLoggedIn" class="booking-section mb-4">
-            <div class="bs-body">
-              <label class="f-label">Find your bookings by email</label>
+          <!-- Guest email lookup -->
+          <div v-if="!isLoggedIn" class="bk-guest-lookup">
+            <div class="bk-guest-icon"><i class="bi bi-envelope-open"></i></div>
+            <div class="bk-guest-content">
+              <p class="bk-guest-title">Find your booking</p>
+              <p class="bk-guest-sub">Enter the email used when you booked.</p>
               <div class="bk-guest-row">
                 <input
-                  type="email" class="f-input bk-guest-input"
-                  v-model="guestEmailInput" placeholder="you@email.com"
+                  type="email"
+                  class="f-input bk-guest-input"
+                  v-model="guestEmailInput"
+                  placeholder="you@email.com"
                   @keyup.enter="lookupGuestBookings"
                 />
-                <button class="fc-select-btn bk-guest-btn" @click="lookupGuestBookings">Find</button>
+                <button class="bk-find-btn" @click="lookupGuestBookings">
+                  <i class="bi bi-search me-1"></i> Find
+                </button>
               </div>
-              <p class="bk-guest-hint">
+              <p class="bk-guest-login-hint">
                 Booked while logged in?
-                <RouterLink :to="{ name: 'Login', query: { redirect: '/my-bookings' } }" class="gold-link">Log in</RouterLink>
-                to see everything in one place.
+                <RouterLink :to="{ name: 'Login', query: { redirect: '/my-bookings' } }" class="gold-link">
+                  Sign in to see all your trips →
+                </RouterLink>
               </p>
             </div>
           </div>
 
-          <div v-if="errorMsg" class="alert alert-danger">{{ errorMsg }}</div>
-
-          <div v-if="loading" class="bk-loading">
-            <span class="spinner-border text-warning"></span>
-            <span class="bk-loading-text">Loading your bookings…</span>
+          <!-- Error -->
+          <div v-if="errorMsg" class="bk-error-banner">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ errorMsg }}
           </div>
 
+          <!-- Loading -->
+          <div v-if="loading" class="bk-loading">
+            <div class="bk-spinner"></div>
+            <span class="bk-loading-label">Loading your bookings…</span>
+          </div>
+
+          <!-- Empty state -->
           <div v-else-if="hasSearched && bookings.length === 0" class="bk-empty">
-            <i class="bi bi-ticket-perforated bk-empty-icon"></i>
-            <p class="bk-empty-text">No bookings found.</p>
-            <RouterLink :to="{ name: 'SearchFlights' }" class="gold-link">Search for a flight →</RouterLink>
+            <div class="bk-empty-icon"><i class="bi bi-calendar-x"></i></div>
+            <p class="bk-empty-title">No bookings found</p>
+            <p class="bk-empty-sub">Ready to go somewhere?</p>
+            <RouterLink :to="{ name: 'SearchFlights' }" class="bk-search-cta">
+              <i class="bi bi-search me-2"></i>Search flights
+            </RouterLink>
           </div>
 
           <!-- ── Booking cards ──────────────────────────────────────────── -->
-          <div
-            v-for="booking in bookings" :key="booking._id"
-            class="bk-card-wrap mb-4"
-            :class="{ 'is-cancelled': booking.status === 'cancelled' }"
-          >
-            <!-- Flight summary row -->
-            <div class="bk-flight-row">
+          <div class="bk-list">
+            <div
+              v-for="(booking, idx) in bookings"
+              :key="booking._id"
+              class="bk-card"
+              :class="{ 'is-cancelled': booking.status === 'cancelled' }"
+            >
 
-              <!-- Origin -->
-              <div class="bk-endpoint">
-                <div class="bk-time">{{ formatTime(booking.flightId?.departureTime) }}</div>
-                <div class="bk-airport">
-                  {{ booking.flightId?.originAirportId?.city || booking.flightId?.originAirportId?.iataCode || 'DEP' }}
+              <!-- Card top bar: status + ref -->
+              <div class="bk-card-topbar">
+                <div class="bk-topbar-left">
+                  <span :class="statusBadgeClass(booking.status)">
+                    <i :class="`bi ${statusIcon(booking.status)} me-1`"></i>
+                    {{ booking.status }}
+                  </span>
+                  <span class="bk-ref-pill">
+                    <i class="bi bi-hash me-1"></i>{{ booking.bookingReference }}
+                  </span>
+                  <span v-if="booking.checkedIn" class="bk-checkedin-pill">
+                    <i class="bi bi-qr-code-scan me-1"></i>Checked in
+                  </span>
                 </div>
-                <div class="bk-date">{{ formatDateLabel(booking.flightId?.departureTime) }}</div>
-              </div>
-
-              <!-- Track -->
-              <div class="bk-track">
-                <div class="bk-duration">{{ calcTravelTime(booking.flightId?.departureTime, booking.flightId?.arrivalTime) }}</div>
-                <div class="bk-track-line">
-                  <span class="bk-plane-medallion"><i class="bi bi-airplane-fill"></i></span>
-                </div>
-                <div class="bk-airline-name">{{ booking.flightId?.airlineId?.name || '' }}</div>
-              </div>
-
-              <!-- Destination -->
-              <div class="bk-endpoint bk-endpoint--right">
-                <div class="bk-time">{{ formatTime(booking.flightId?.arrivalTime) }}</div>
-                <div class="bk-airport">
-                  {{ booking.flightId?.destinationAirportId?.city || booking.flightId?.destinationAirportId?.iataCode || 'ARR' }}
-                </div>
-                <div class="bk-date">{{ formatDateLabel(booking.flightId?.arrivalTime) }}</div>
-              </div>
-
-              <!-- Action panel -->
-              <div class="bk-action-panel">
-                <span :class="statusBadgeClass(booking.status)">{{ booking.status }}</span>
-                <div class="bk-price">₱{{ booking.totalAmount?.toLocaleString() }}</div>
-                <div class="bk-ref">Ref: {{ booking.bookingReference }}</div>
-                <div v-if="booking.checkedIn" class="bk-checked-in">
-                  <i class="bi bi-check-circle-fill"></i> Checked in
-                </div>
-                <div class="bk-btn-stack">
-                  <RouterLink
-                    v-if="booking.status === 'confirmed' && !booking.checkedIn && isUpcoming(booking)"
-                    :to="{ name: 'CheckIn', query: { ref: booking.bookingReference } }"
-                    class="bk-btn bk-btn--primary"
-                  ><i class="bi bi-qr-code-scan"></i> Check-in</RouterLink>
-
-                  <button
-                    v-if="booking.status !== 'cancelled' && isUpcoming(booking)"
-                    class="bk-btn bk-btn--gold"
-                    @click="openRebookModal(booking)"
-                  ><i class="bi bi-arrow-repeat"></i> Rebook</button>
-
-                  <button
-                    v-if="booking.status !== 'cancelled' && !booking.checkedIn"
-                    class="bk-btn bk-btn--danger"
-                    :disabled="cancellingRef === booking.bookingReference"
-                    @click="cancelBooking(booking)"
-                  >
-                    <i class="bi bi-x-circle"></i>
-                    {{ cancellingRef === booking.bookingReference ? 'Cancelling…' : 'Cancel' }}
-                  </button>
-
-                  <button class="bk-btn bk-btn--ghost" @click="toggleDetails(booking._id)">
-                    <i :class="`bi ${openDetails.has(booking._id) ? 'bi-chevron-up' : 'bi-chevron-down'}`"></i>
-                    {{ openDetails.has(booking._id) ? 'Less info' : 'More info' }}
-                  </button>
+                <div class="bk-topbar-price">
+                  ₱{{ booking.totalAmount?.toLocaleString() }}
                 </div>
               </div>
-            </div>
-            <!-- /flight row -->
 
-            <!-- Detail panel -->
-            <transition name="bk-slide">
-              <div v-if="openDetails.has(booking._id)" class="bk-detail-panel">
-                <div class="bk-detail-grid">
-                  <div class="bk-detail-cell">
-                    <span class="bk-detail-label">Flight</span>
-                    <span class="bk-detail-value">
-                      {{ booking.flightId?.flightNumber || '—' }}
-                      <span v-if="booking.flightId?.airlineId?.name" class="bk-detail-sub">· {{ booking.flightId.airlineId.name }}</span>
-                    </span>
+              <!-- Flight route row -->
+              <div class="bk-route-row">
+
+                <!-- Origin -->
+                <div class="bk-endpoint">
+                  <div class="bk-iata">
+                    {{ booking.flightId?.originAirportId?.iataCode || 'DEP' }}
                   </div>
-                  <div class="bk-detail-cell">
-                    <span class="bk-detail-label">Passenger</span>
-                    <span class="bk-detail-value">{{ booking.passengerName || '—' }}</span>
+                  <div class="bk-city">
+                    {{ booking.flightId?.originAirportId?.city || 'Departure' }}
                   </div>
-                  <div class="bk-detail-cell">
-                    <span class="bk-detail-label">Seat</span>
-                    <span class="bk-detail-value">
-                      <template v-if="booking.seat">
-                        {{ booking.seat.seatNumber }}
-                        <span class="bk-seat-badge" :class="`bk-seat-badge--${booking.seat.class}`">
-                          {{ seatClassLabel(booking.seat.class) }}
+                  <div class="bk-time">{{ formatTime(booking.flightId?.departureTime) }}</div>
+                  <div class="bk-date">{{ formatDateLabel(booking.flightId?.departureTime) }}</div>
+                </div>
+
+                <!-- Mid / timeline -->
+                <div class="bk-mid">
+                  <div class="bk-duration">
+                    {{ calcTravelTime(booking.flightId?.departureTime, booking.flightId?.arrivalTime) }}
+                  </div>
+                  <div class="bk-line-wrap">
+                    <div class="bk-line-dot"></div>
+                    <div class="bk-line-track">
+                      <i class="bi bi-airplane-fill bk-plane-icon"></i>
+                    </div>
+                    <div class="bk-line-dot"></div>
+                  </div>
+                  <div class="bk-airline">
+                    {{ booking.flightId?.airlineId?.name || '' }}
+                  </div>
+                </div>
+
+                <!-- Destination -->
+                <div class="bk-endpoint bk-endpoint--right">
+                  <div class="bk-iata">
+                    {{ booking.flightId?.destinationAirportId?.iataCode || 'ARR' }}
+                  </div>
+                  <div class="bk-city">
+                    {{ booking.flightId?.destinationAirportId?.city || 'Arrival' }}
+                  </div>
+                  <div class="bk-time">{{ formatTime(booking.flightId?.arrivalTime) }}</div>
+                  <div class="bk-date">{{ formatDateLabel(booking.flightId?.arrivalTime) }}</div>
+                </div>
+
+              </div>
+
+              <!-- Action buttons row -->
+              <div class="bk-actions">
+                <RouterLink
+                  v-if="booking.status === 'confirmed' && !booking.checkedIn && isUpcoming(booking)"
+                  :to="{ name: 'CheckIn', query: { ref: booking.bookingReference } }"
+                  class="bk-btn bk-btn--checkin"
+                >
+                  <i class="bi bi-qr-code-scan"></i>
+                  <span>Check-in</span>
+                </RouterLink>
+
+                <button
+                  v-if="booking.status !== 'cancelled' && isUpcoming(booking)"
+                  class="bk-btn bk-btn--rebook"
+                  @click="openRebookModal(booking)"
+                >
+                  <i class="bi bi-arrow-repeat"></i>
+                  <span>Rebook</span>
+                </button>
+
+                <button
+                  v-if="booking.status !== 'cancelled' && !booking.checkedIn"
+                  class="bk-btn bk-btn--cancel"
+                  :disabled="cancellingRef === booking.bookingReference"
+                  @click="cancelBooking(booking)"
+                >
+                  <i class="bi bi-x-circle"></i>
+                  <span>{{ cancellingRef === booking.bookingReference ? 'Cancelling…' : 'Cancel' }}</span>
+                </button>
+
+                <button
+                  class="bk-btn bk-btn--details"
+                  @click="toggleDetails(booking._id)"
+                >
+                  <i :class="`bi ${openDetails.has(booking._id) ? 'bi-chevron-up' : 'bi-chevron-down'}`"></i>
+                  <span>{{ openDetails.has(booking._id) ? 'Less' : 'Details' }}</span>
+                </button>
+              </div>
+
+              <!-- ── Detail panel ────────────────────────────────────── -->
+              <transition name="bk-slide">
+                <div v-if="openDetails.has(booking._id)" class="bk-detail">
+
+                  <div class="bk-detail-grid">
+                    <div class="bk-ditem">
+                      <span class="bk-dlabel">Flight</span>
+                      <span class="bk-dvalue">
+                        {{ booking.flightId?.flightNumber || '—' }}
+                        <span v-if="booking.flightId?.airlineId?.name" class="bk-dsub">
+                          · {{ booking.flightId.airlineId.name }}
                         </span>
-                      </template>
-                      <template v-else>—</template>
-                    </span>
-                  </div>
-                  <div class="bk-detail-cell">
-                    <span class="bk-detail-label">Ticket No.</span>
-                    <span class="bk-detail-value bk-detail-mono">{{ booking.ticketNumber || '—' }}</span>
-                  </div>
-                  <div class="bk-detail-cell">
-                    <span class="bk-detail-label">Departure Terminal</span>
-                    <span class="bk-detail-value">
-                      {{ booking.flightId?.originTerminal ? 'Terminal ' + booking.flightId.originTerminal : '—' }}
-                    </span>
-                  </div>
-                  <div class="bk-detail-cell">
-                    <span class="bk-detail-label">Arrival Terminal</span>
-                    <span class="bk-detail-value">
-                      {{ booking.flightId?.destinationTerminal ? 'Terminal ' + booking.flightId.destinationTerminal : '—' }}
-                    </span>
-                  </div>
-                </div>
+                      </span>
+                    </div>
 
-                <div class="bk-timebar">
-                  <div class="bk-timebar-block">
-                    <span class="bk-detail-label">Departure</span>
-                    <span class="bk-timebar-time">{{ formatTimeOnly(booking.flightId?.departureTime) }}</span>
-                    <span class="bk-timebar-date">{{ formatDateLabel(booking.flightId?.departureTime) }}</span>
+                    <div class="bk-ditem">
+                      <span class="bk-dlabel">Passenger</span>
+                      <span class="bk-dvalue">{{ booking.passengerName || '—' }}</span>
+                    </div>
+
+                    <div class="bk-ditem">
+                      <span class="bk-dlabel">Seat</span>
+                      <span class="bk-dvalue">
+                        <template v-if="booking.seat">
+                          {{ booking.seat.seatNumber }}
+                          <span class="bk-seat-badge" :class="booking.seat.class">
+                            {{ seatClassLabel(booking.seat.class) }}
+                          </span>
+                        </template>
+                        <template v-else>—</template>
+                      </span>
+                    </div>
+
+                    <div class="bk-ditem">
+                      <span class="bk-dlabel">Ticket No.</span>
+                      <span class="bk-dvalue bk-mono">{{ booking.ticketNumber || '—' }}</span>
+                    </div>
+
+                    <div class="bk-ditem">
+                      <span class="bk-dlabel">Dep. Terminal</span>
+                      <span class="bk-dvalue">
+                        {{ booking.flightId?.originTerminal
+                          ? 'Terminal ' + booking.flightId.originTerminal : '—' }}
+                      </span>
+                    </div>
+
+                    <div class="bk-ditem">
+                      <span class="bk-dlabel">Arr. Terminal</span>
+                      <span class="bk-dvalue">
+                        {{ booking.flightId?.destinationTerminal
+                          ? 'Terminal ' + booking.flightId.destinationTerminal : '—' }}
+                      </span>
+                    </div>
                   </div>
-                  <i class="bi bi-arrow-right bk-timebar-arrow"></i>
-                  <div class="bk-timebar-block">
-                    <span class="bk-detail-label">Arrival</span>
-                    <span class="bk-timebar-time">{{ formatTimeOnly(booking.flightId?.arrivalTime) }}</span>
-                    <span class="bk-timebar-date">{{ formatDateLabel(booking.flightId?.arrivalTime) }}</span>
+
+                  <!-- Times -->
+                  <div class="bk-times">
+                    <div class="bk-tblock">
+                      <span class="bk-dlabel">Departure</span>
+                      <span class="bk-tbig">{{ formatTimeOnly(booking.flightId?.departureTime) }}</span>
+                      <span class="bk-tdate">{{ formatDateLabel(booking.flightId?.departureTime) }}</span>
+                    </div>
+                    <div class="bk-tarrow"><i class="bi bi-arrow-right"></i></div>
+                    <div class="bk-tblock">
+                      <span class="bk-dlabel">Arrival</span>
+                      <span class="bk-tbig">{{ formatTimeOnly(booking.flightId?.arrivalTime) }}</span>
+                      <span class="bk-tdate">{{ formatDateLabel(booking.flightId?.arrivalTime) }}</span>
+                    </div>
                   </div>
+
                 </div>
-              </div>
-            </transition>
+              </transition>
+
+            </div>
           </div>
           <!-- /booking cards -->
 
@@ -431,210 +561,298 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- REBOOK MODAL                                                         -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- REBOOK MODAL                                                          -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
   <teleport to="body">
     <transition name="rb-fade">
       <div
         v-if="rebookTarget"
         class="rb-overlay"
         @click.self="closeRebookModal"
-        role="dialog" aria-modal="true"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="rebookStep === 'confirm' ? 'rb-confirm-title' : 'rb-search-title'"
       >
-        <transition name="rb-slide-up" appear>
-          <div class="rb-modal">
+        <transition name="rb-slide-up">
+          <div class="rb-modal" v-if="rebookTarget">
 
-            <!-- ── STEP 1: Confirm intent ─────────────────────────────── -->
+            <!-- ── STEP 1: Confirm ──────────────────────────────────── -->
             <template v-if="rebookStep === 'confirm'">
+
               <div class="rb-header">
-                <div class="rb-header-icon"><i class="bi bi-arrow-repeat"></i></div>
-                <div class="rb-header-text">
-                  <h5 class="rb-header-title">Rebook this flight?</h5>
-                  <p class="rb-header-sub">{{ rebookTarget.bookingReference }}</p>
+                <div class="rb-header-icon">
+                  <i class="bi bi-arrow-repeat"></i>
                 </div>
-                <button class="rb-close" @click="closeRebookModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-              </div>
-
-              <div class="rb-confirm-body">
-                <div class="rb-summary-card">
-                  <div class="rb-summary-endpoints">
-                    <div class="rb-summary-ep">
-                      <div class="rb-summary-iata">{{ rebookTarget.flightId?.originAirportId?.iataCode || 'DEP' }}</div>
-                      <div class="rb-summary-city">{{ rebookTarget.flightId?.originAirportId?.city || 'Origin' }}</div>
-                      <div class="rb-summary-time">{{ formatTimeOnly(rebookTarget.flightId?.departureTime) }}</div>
-                    </div>
-                    <div class="rb-summary-track">
-                      <div class="rb-summary-duration">{{ calcTravelTime(rebookTarget.flightId?.departureTime, rebookTarget.flightId?.arrivalTime) }}</div>
-                      <div class="rb-summary-track-line">
-                        <i class="bi bi-airplane-fill rb-summary-plane"></i>
-                      </div>
-                      <div class="rb-summary-airline">{{ rebookTarget.flightId?.airlineId?.name || '' }}</div>
-                    </div>
-                    <div class="rb-summary-ep rb-summary-ep--right">
-                      <div class="rb-summary-iata">{{ rebookTarget.flightId?.destinationAirportId?.iataCode || 'ARR' }}</div>
-                      <div class="rb-summary-city">{{ rebookTarget.flightId?.destinationAirportId?.city || 'Destination' }}</div>
-                      <div class="rb-summary-time">{{ formatTimeOnly(rebookTarget.flightId?.arrivalTime) }}</div>
-                    </div>
-                  </div>
-                  <div class="rb-summary-datebar">
-                    <i class="bi bi-calendar3 me-2"></i>{{ formatDateLabel(rebookTarget.flightId?.departureTime) }}
-                  </div>
+                <div class="flex-grow-1">
+                  <h5 id="rb-confirm-title" class="rb-modal-title">Rebook this flight?</h5>
+                  <p class="rb-modal-sub">Ref: {{ rebookTarget.bookingReference }}</p>
                 </div>
-
-                <div class="rb-notice">
-                  <i class="bi bi-info-circle-fill rb-notice-icon"></i>
-                  <span>You'll choose a new date, flight, and seat on the next screen. Any fare difference may apply.</span>
-                </div>
-              </div>
-
-              <div class="rb-footer">
-                <button class="rb-btn rb-btn--cancel" @click="closeRebookModal">Keep current flight</button>
-                <button class="rb-btn rb-btn--primary" @click="proceedToSearch">
-                  Continue <i class="bi bi-arrow-right ms-1"></i>
-                </button>
-              </div>
-            </template>
-            <!-- /step 1 -->
-
-            <!-- ── STEP 2: Search & pick ───────────────────────────────── -->
-            <template v-if="rebookStep === 'search'">
-              <div class="rb-header">
-                <button class="rb-back" @click="rebookStep = 'confirm'" :disabled="rebookSubmitting" aria-label="Back">
-                  <i class="bi bi-arrow-left"></i>
-                </button>
-                <div class="rb-header-text">
-                  <h5 class="rb-header-title">Choose a new flight</h5>
-                  <p class="rb-header-sub">{{ rebookTarget.bookingReference }}</p>
-                </div>
-                <button class="rb-close" @click="closeRebookModal" :disabled="rebookSubmitting" aria-label="Close">
+                <button class="rb-close" @click="closeRebookModal" aria-label="Close">
                   <i class="bi bi-x-lg"></i>
                 </button>
               </div>
 
+              <div class="rb-confirm-body">
+
+                <!-- Current flight summary card -->
+                <div class="rb-summary-card">
+                  <div class="rb-summary-airports">
+                    <div class="rb-sum-endpoint">
+                      <div class="rb-sum-iata">
+                        {{ rebookTarget.flightId?.originAirportId?.iataCode || 'DEP' }}
+                      </div>
+                      <div class="rb-sum-city">
+                        {{ rebookTarget.flightId?.originAirportId?.city || 'Origin' }}
+                      </div>
+                      <div class="rb-sum-time">
+                        {{ formatTimeOnly(rebookTarget.flightId?.departureTime) }}
+                      </div>
+                    </div>
+
+                    <div class="rb-sum-mid">
+                      <div class="rb-sum-duration">
+                        {{ calcTravelTime(rebookTarget.flightId?.departureTime, rebookTarget.flightId?.arrivalTime) }}
+                      </div>
+                      <div class="rb-sum-track">
+                        <div class="rb-sum-dot"></div>
+                        <div class="rb-sum-line">
+                          <i class="bi bi-airplane-fill rb-sum-plane"></i>
+                        </div>
+                        <div class="rb-sum-dot"></div>
+                      </div>
+                      <div class="rb-sum-airline">
+                        {{ rebookTarget.flightId?.airlineId?.name || '' }}
+                      </div>
+                    </div>
+
+                    <div class="rb-sum-endpoint rb-sum-endpoint--right">
+                      <div class="rb-sum-iata">
+                        {{ rebookTarget.flightId?.destinationAirportId?.iataCode || 'ARR' }}
+                      </div>
+                      <div class="rb-sum-city">
+                        {{ rebookTarget.flightId?.destinationAirportId?.city || 'Destination' }}
+                      </div>
+                      <div class="rb-sum-time">
+                        {{ formatTimeOnly(rebookTarget.flightId?.arrivalTime) }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="rb-summary-date">
+                    <i class="bi bi-calendar3 me-2"></i>
+                    {{ formatDateLabel(rebookTarget.flightId?.departureTime) }}
+                  </div>
+                </div>
+
+                <!-- Notice -->
+                <div class="rb-notice">
+                  <i class="bi bi-info-circle-fill rb-notice-icon"></i>
+                  <p class="rb-notice-text">
+                    You're about to rebook this flight. You'll choose a new date, flight, and seat on the next screen.
+                    Any fare difference may apply.
+                  </p>
+                </div>
+
+              </div>
+
+              <div class="rb-footer">
+                <button class="rb-btn rb-btn--ghost" @click="closeRebookModal">
+                  Keep current flight
+                </button>
+                <button class="rb-btn rb-btn--primary" @click="proceedToSearch">
+                  Continue <i class="bi bi-arrow-right ms-2"></i>
+                </button>
+              </div>
+
+            </template>
+            <!-- /step 1 -->
+
+            <!-- ── STEP 2: Search & seat picker ─────────────────────── -->
+            <template v-if="rebookStep === 'search'">
+
+              <div class="rb-header">
+                <button
+                  class="rb-back"
+                  @click="rebookStep = 'confirm'"
+                  aria-label="Back"
+                  :disabled="rebookSubmitting"
+                >
+                  <i class="bi bi-arrow-left"></i>
+                </button>
+                <div class="flex-grow-1">
+                  <h5 id="rb-search-title" class="rb-modal-title">
+                    Choose a new flight
+                    <span class="rb-ref-inline">· {{ rebookTarget.bookingReference }}</span>
+                  </h5>
+                </div>
+                <button
+                  class="rb-close"
+                  @click="closeRebookModal"
+                  aria-label="Close"
+                  :disabled="rebookSubmitting"
+                >
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+
+              <!-- Route strip -->
               <div class="rb-route-strip">
-                <span class="rb-route-iata">{{ rebookTarget.flightId?.originAirportId?.iataCode || 'DEP' }}</span>
-                <i class="bi bi-arrow-right rb-route-arrow"></i>
-                <span class="rb-route-iata">{{ rebookTarget.flightId?.destinationAirportId?.iataCode || 'ARR' }}</span>
-                <span class="rb-route-current">Currently: {{ formatDateLabel(rebookTarget.flightId?.departureTime) }}</span>
+                <div class="rb-strip-route">
+                  <span class="rb-strip-iata">{{ rebookTarget.flightId?.originAirportId?.iataCode || 'DEP' }}</span>
+                  <i class="bi bi-arrow-right rb-strip-arrow"></i>
+                  <span class="rb-strip-iata">{{ rebookTarget.flightId?.destinationAirportId?.iataCode || 'ARR' }}</span>
+                </div>
+                <span class="rb-strip-current">
+                  Currently: {{ formatDateLabel(rebookTarget.flightId?.departureTime) }}
+                </span>
               </div>
 
-              <!-- Step progress -->
-              <div class="rb-progress">
-                <div class="rb-progress-step" :class="{ 'is-active': true, 'is-done': rebookFlights.length > 0 }">
-                  <span class="rb-progress-num">1</span>
-                  <span class="rb-progress-label">Date</span>
-                </div>
-                <div class="rb-progress-line"></div>
-                <div class="rb-progress-step" :class="{ 'is-active': rebookFlights.length > 0, 'is-done': !!selectedFlightId }">
-                  <span class="rb-progress-num">2</span>
-                  <span class="rb-progress-label">Flight</span>
-                </div>
-                <div class="rb-progress-line"></div>
-                <div class="rb-progress-step" :class="{ 'is-active': !!selectedFlightId, 'is-done': !!selectedSeatId }">
-                  <span class="rb-progress-num">3</span>
-                  <span class="rb-progress-label">Seat</span>
-                </div>
-              </div>
+              <div class="rb-search-body">
 
-              <div class="rb-body">
+                <!-- Step indicators -->
+                <div class="rb-steps">
+                  <div class="rb-step" :class="{ active: true, done: !!selectedFlightId }">
+                    <div class="rb-step-num">
+                      <i v-if="selectedFlightId" class="bi bi-check-lg"></i>
+                      <span v-else>1</span>
+                    </div>
+                    <span class="rb-step-label">Date</span>
+                  </div>
+                  <div class="rb-step-line"></div>
+                  <div class="rb-step" :class="{ active: rebookFlights.length > 0, done: !!selectedFlightId }">
+                    <div class="rb-step-num">
+                      <i v-if="selectedFlightId" class="bi bi-check-lg"></i>
+                      <span v-else>2</span>
+                    </div>
+                    <span class="rb-step-label">Flight</span>
+                  </div>
+                  <div class="rb-step-line"></div>
+                  <div class="rb-step" :class="{ active: !!selectedFlightId }">
+                    <div class="rb-step-num">3</div>
+                    <span class="rb-step-label">Seat</span>
+                  </div>
+                </div>
 
                 <!-- Date + search -->
-                <div class="rb-field-group">
-                  <label class="f-label">Select a new date</label>
+                <div class="rb-section">
+                  <label class="rb-label">Select a new date</label>
                   <div class="rb-date-row">
-                    <input type="date" class="f-input rb-date-input" v-model="rebookDate"
-                      :min="new Date().toISOString().slice(0, 10)" />
-                    <button class="rb-btn rb-btn--primary rb-find-btn"
-                      :disabled="rebookLoading || !rebookDate" @click="searchRebookFlights">
-                      <span v-if="rebookLoading" class="spinner-border spinner-border-sm"></span>
-                      <i v-else class="bi bi-search"></i>
-                      {{ rebookLoading ? 'Searching…' : 'Find' }}
+                    <input
+                      type="date"
+                      class="f-input rb-date-input"
+                      v-model="rebookDate"
+                      :min="new Date().toISOString().slice(0, 10)"
+                    />
+                    <button
+                      class="rb-btn rb-btn--primary rb-search-btn"
+                      :disabled="rebookLoading || !rebookDate"
+                      @click="searchRebookFlights"
+                    >
+                      <span v-if="rebookLoading" class="rb-spinner"></span>
+                      {{ rebookLoading ? 'Searching…' : 'Find Flights' }}
                     </button>
                   </div>
                 </div>
 
                 <!-- Flight list -->
-                <div v-if="rebookFlights.length > 0" class="rb-field-group">
-                  <label class="f-label">Choose a flight</label>
-                  <div class="rb-flight-list">
-                    <div
-                      v-for="flight in rebookFlights" :key="flight._id"
-                      class="rb-flight-card"
-                      :class="{ 'is-selected': selectedFlightId === flight._id }"
-                      @click="selectRebookFlight(flight._id)"
-                      role="radio" :aria-checked="selectedFlightId === flight._id"
-                      tabindex="0"
-                      @keydown.enter="selectRebookFlight(flight._id)"
-                      @keydown.space.prevent="selectRebookFlight(flight._id)"
-                    >
-                      <div class="rb-fc-left">
-                        <div class="rb-fc-times">
-                          <span class="rb-fc-time">{{ formatTimeOnly(flight.departureTime) }}</span>
-                          <i class="bi bi-arrow-right rb-fc-arrow"></i>
-                          <span class="rb-fc-time">{{ formatTimeOnly(flight.arrivalTime) }}</span>
+                <transition name="rb-fade">
+                  <div v-if="rebookFlights.length > 0" class="rb-section">
+                    <label class="rb-label">Available flights</label>
+                    <div class="rb-flight-list">
+                      <div
+                        v-for="flight in rebookFlights"
+                        :key="flight._id"
+                        class="rb-flight-row"
+                        :class="{ selected: selectedFlightId === flight._id }"
+                        @click="selectRebookFlight(flight._id)"
+                        role="button"
+                        tabindex="0"
+                        @keyup.enter="selectRebookFlight(flight._id)"
+                      >
+                        <div class="rb-flight-left">
+                          <div class="rb-flight-times">
+                            <span class="rb-ftime">{{ formatTimeOnly(flight.departureTime) }}</span>
+                            <i class="bi bi-arrow-right rb-time-arrow"></i>
+                            <span class="rb-ftime">{{ formatTimeOnly(flight.arrivalTime) }}</span>
+                          </div>
+                          <div class="rb-flight-meta">
+                            {{ flight.flightNumber }}
+                            <span v-if="flight.airlineId?.name"> · {{ flight.airlineId.name }}</span>
+                            <span class="rb-flight-dur">{{ calcTravelTime(flight.departureTime, flight.arrivalTime) }}</span>
+                          </div>
                         </div>
-                        <div class="rb-fc-meta">
-                          <span>{{ flight.flightNumber }}</span>
-                          <span v-if="flight.airlineId?.name" class="rb-fc-dot">·</span>
-                          <span v-if="flight.airlineId?.name">{{ flight.airlineId.name }}</span>
-                          <span class="rb-fc-dot">·</span>
-                          <span>{{ calcTravelTime(flight.departureTime, flight.arrivalTime) }}</span>
+                        <div class="rb-flight-right">
+                          <div class="rb-flight-price">
+                            ₱{{ (flight.basePrice ?? flight.price ?? flight.economyPrice)?.toLocaleString() || '—' }}
+                          </div>
+                          <i v-if="selectedFlightId === flight._id" class="bi bi-check-circle-fill rb-tick"></i>
                         </div>
-                      </div>
-                      <div class="rb-fc-right">
-                        <div class="rb-fc-price">₱{{ (flight.basePrice ?? flight.price ?? flight.economyPrice)?.toLocaleString() || '—' }}</div>
-                        <i v-if="selectedFlightId === flight._id" class="bi bi-check-circle-fill rb-fc-check"></i>
                       </div>
                     </div>
                   </div>
-                </div>
+                </transition>
 
                 <!-- Seat picker -->
-                <div v-if="selectedFlightId" class="rb-field-group">
-                  <label class="f-label">Choose a seat</label>
-                  <div v-if="seatsLoading" class="rb-seats-loading">
-                    <span class="spinner-border spinner-border-sm text-warning"></span>
-                    <span>Loading seats…</span>
-                  </div>
-                  <div v-else-if="rebookSeats.length === 0" class="rb-seats-empty">
-                    No available seats found for this flight.
-                  </div>
-                  <div v-else class="rb-seat-grid">
-                    <button
-                      v-for="seat in rebookSeats" :key="seat._id"
-                      class="rb-seat"
-                      :class="{ 'is-selected': selectedSeatId === seat._id, 'is-business': seat.class === 'business', 'is-first': seat.class === 'first' }"
-                      @click="selectedSeatId = seat._id"
-                      :title="`${seat.seatNumber} · ${seat.class}`"
-                    >
-                      <span class="rb-seat-num">{{ seat.seatNumber }}</span>
-                      <span class="rb-seat-cls">{{ seat.class }}</span>
-                    </button>
-                  </div>
-                  <div v-if="rebookSeats.length > 0" class="rb-seat-legend">
-                    <span class="rb-legend-item rb-legend-economy">Economy</span>
-                    <span class="rb-legend-item rb-legend-business">Business</span>
-                    <span class="rb-legend-item rb-legend-first">First</span>
-                  </div>
-                </div>
+                <transition name="rb-fade">
+                  <div v-if="selectedFlightId" class="rb-section">
+                    <label class="rb-label">Choose a seat</label>
 
-                <div v-if="rebookError" class="rb-error-msg">
-                  <i class="bi bi-exclamation-circle me-2"></i>{{ rebookError }}
+                    <div v-if="seatsLoading" class="rb-seats-loading">
+                      <span class="rb-spinner"></span>
+                      <span>Loading seats…</span>
+                    </div>
+
+                    <p v-else-if="rebookSeats.length === 0" class="rb-no-seats">
+                      No seats available for this flight.
+                    </p>
+
+                    <div v-else class="rb-seat-grid">
+                      <button
+                        v-for="seat in rebookSeats"
+                        :key="seat._id"
+                        class="rb-seat"
+                        :class="{
+                          selected:  selectedSeatId === seat._id,
+                          business:  seat.class === 'business',
+                          first:     seat.class === 'first',
+                          economy:   seat.class === 'economy'
+                        }"
+                        @click="selectedSeatId = seat._id"
+                        :title="seat.class"
+                      >
+                        <span class="rb-seat-num">{{ seat.seatNumber }}</span>
+                        <span class="rb-seat-cls">{{ seat.class }}</span>
+                      </button>
+                    </div>
+                  </div>
+                </transition>
+
+                <!-- Error -->
+                <div v-if="rebookError" class="rb-error">
+                  <i class="bi bi-exclamation-circle-fill me-2"></i>{{ rebookError }}
                 </div>
 
               </div>
-              <!-- /rb-body -->
 
               <div class="rb-footer">
-                <button class="rb-btn rb-btn--cancel" :disabled="rebookSubmitting" @click="closeRebookModal">Cancel</button>
-                <button class="rb-btn rb-btn--primary"
+                <button
+                  class="rb-btn rb-btn--ghost"
+                  :disabled="rebookSubmitting"
+                  @click="closeRebookModal"
+                >
+                  Cancel
+                </button>
+                <button
+                  class="rb-btn rb-btn--primary"
                   :disabled="!selectedFlightId || !selectedSeatId || rebookSubmitting"
-                  @click="confirmRebook">
-                  <span v-if="rebookSubmitting" class="spinner-border spinner-border-sm me-1"></span>
+                  @click="confirmRebook"
+                >
+                  <span v-if="rebookSubmitting" class="rb-spinner me-1"></span>
                   {{ rebookSubmitting ? 'Confirming…' : 'Confirm Rebook' }}
                 </button>
               </div>
+
             </template>
             <!-- /step 2 -->
 
@@ -646,691 +864,853 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 </template>
 
 <style scoped>
-/* ═══════════════════════════════════════════════════════════════════════
-   ALL COLOUR VALUES USE CSS CUSTOM PROPERTIES FROM index.css.
-   This means light/dark theme switching works automatically.
-   No hardcoded hex values appear here except where CSS vars are
-   unavailable (e.g. rgba() arithmetic that needs a concrete number).
-═══════════════════════════════════════════════════════════════════════ */
-
-/* ── Page shell ──────────────────────────────────────────────────────── */
-.bk-page-wrap { padding-top: 80px; padding-bottom: 80px; min-height: 100vh; }
-.bk-container { max-width: 900px; }
-
-/* ── Guest lookup ────────────────────────────────────────────────────── */
-.bk-guest-row   { display: flex; gap: 10px; margin-top: 8px; }
-.bk-guest-input { flex: 1; min-width: 0; }
-.bk-guest-btn   { flex-shrink: 0; white-space: nowrap; }
-.bk-guest-hint  { font-size: 0.78rem; color: var(--muted); margin-top: 10px; margin-bottom: 0; }
-
-/* ── Loading / empty ─────────────────────────────────────────────────── */
-.bk-loading      { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 64px 0; }
-.bk-loading-text { color: var(--muted); font-size: 0.85rem; }
-.bk-empty        { text-align: center; padding: 72px 24px; }
-.bk-empty-icon   { display: block; font-size: 3rem; color: var(--border); margin-bottom: 14px; }
-.bk-empty-text   { color: var(--muted); font-size: 0.9rem; margin-bottom: 10px; }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   BOOKING CARD
-═══════════════════════════════════════════════════════════════════════ */
-.bk-card-wrap {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 24px var(--glass-shadow);
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+/* ─────────────────────────────────────────────────────────────────────────
+   PAGE LAYOUT
+───────────────────────────────────────────────────────────────────────── */
+.bk-page-wrapper {
+  padding: 40px 16px 80px;
 }
-.bk-card-wrap:hover    { border-color: var(--border); box-shadow: 0 8px 36px var(--glass-shadow); }
-.bk-card-wrap.is-cancelled { opacity: 0.55; }
-
-/* ── Flight summary row — 4-column desktop grid ──────────────────────── */
-.bk-flight-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
-  align-items: center;
-  padding: 24px 28px;
-  gap: 0;
+.bk-container {
+  max-width: 860px;
+  margin: 0 auto;
 }
 
-/* ── Endpoints ───────────────────────────────────────────────────────── */
-.bk-endpoint       { display: flex; flex-direction: column; gap: 4px; }
-.bk-endpoint--right { text-align: right; }
-
-/* FIX #1: explicit color tokens so neither dark nor light theme loses contrast */
-.bk-time {
-  font-family: var(--font-serif);
-  font-size: 1.7rem;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--text);
-}
-.bk-airport {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.bk-date { font-size: 0.68rem; color: var(--muted); }
-
-/* ── Flight track ────────────────────────────────────────────────────── */
-.bk-track {
+.bk-page-header {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  min-width: 120px;
-  padding: 0 20px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin: 24px 0 28px;
+  gap: 16px;
 }
-.bk-duration {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
+.bk-page-title {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  color: #f0f0f0;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
 }
-.bk-track-line {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
-  position: relative;
-  margin: 3px 0;
+.bk-page-sub {
+  font-size: 0.85rem;
+  color: #777;
+  margin: 0;
 }
-.bk-plane-medallion {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  width: 24px; height: 24px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%;
-  border: 1px solid var(--glass-border);
-  background: var(--bg-60-mid);
-  color: var(--gold);
-  font-size: 0.65rem;
-}
-.bk-airline-name {
-  font-size: 0.62rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-  text-align: center;
-}
-
-/* ── Action panel ────────────────────────────────────────────────────── */
-.bk-action-panel {
+.bk-booking-count {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 5px;
-  padding-left: 24px;
-  border-left: 1px solid var(--border-dim);
-  min-width: 160px;
+  gap: 1px;
+  flex-shrink: 0;
 }
-.bk-price {
-  font-family: var(--font-serif);
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--gold);
+.bk-count-num {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #d4a843;
   line-height: 1;
 }
-.bk-ref       { font-size: 0.72rem; color: var(--gold); opacity: 0.8; }
-.bk-checked-in {
+.bk-count-label {
   font-size: 0.72rem;
-  color: var(--success);
-  display: flex; align-items: center; gap: 4px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-/* ── Button stack ────────────────────────────────────────────────────── */
-.bk-btn-stack {
+/* ─────────────────────────────────────────────────────────────────────────
+   GUEST LOOKUP
+───────────────────────────────────────────────────────────────────────── */
+.bk-guest-lookup {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  width: 100%;
-  margin-top: 6px;
+  gap: 16px;
+  align-items: flex-start;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(212,168,67,0.18);
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 28px;
 }
-
-.bk-btn {
+.bk-guest-icon {
+  width: 42px;
+  height: 42px;
+  background: rgba(212,168,67,0.1);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 7px 12px;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
+  color: #d4a843;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.bk-guest-content { flex: 1; }
+.bk-guest-title   { font-size: 0.95rem; font-weight: 700; color: #e8e8e8; margin: 0 0 2px; }
+.bk-guest-sub     { font-size: 0.78rem; color: #888; margin: 0 0 12px; }
+.bk-guest-row     { display: flex; gap: 8px; }
+.bk-guest-input   { flex: 1; }
+.bk-find-btn {
+  white-space: nowrap;
+  padding: 8px 18px;
+  background: #d4a843;
+  color: #0e0e1a;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-decoration: none;
   cursor: pointer;
-  border: 1px solid transparent;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s, transform 0.1s;
+}
+.bk-find-btn:hover  { background: #e0b84d; }
+.bk-find-btn:active { transform: scale(0.97); }
+.bk-guest-login-hint {
+  font-size: 0.75rem;
+  color: #777;
+  margin: 10px 0 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ERROR / LOADING / EMPTY
+───────────────────────────────────────────────────────────────────────── */
+.bk-error-banner {
+  background: rgba(255,77,77,0.1);
+  border: 1px solid rgba(255,77,77,0.3);
+  color: #ff8080;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+.bk-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 60px 0;
+}
+.bk-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(212,168,67,0.2);
+  border-top-color: #d4a843;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.bk-loading-label { font-size: 0.85rem; color: #888; }
+.bk-empty {
+  text-align: center;
+  padding: 70px 20px;
+}
+.bk-empty-icon {
+  width: 60px;
+  height: 60px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #555;
+  margin: 0 auto 16px;
+}
+.bk-empty-title { font-size: 1rem; font-weight: 700; color: #ccc; margin: 0 0 6px; }
+.bk-empty-sub   { font-size: 0.82rem; color: #666; margin: 0 0 20px; }
+.bk-search-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 22px;
+  background: #d4a843;
+  color: #0e0e1a;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.bk-search-cta:hover { background: #e0b84d; color: #0e0e1a; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BOOKING LIST
+───────────────────────────────────────────────────────────────────────── */
+.bk-list { display: flex; flex-direction: column; gap: 16px; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BOOKING CARD
+───────────────────────────────────────────────────────────────────────── */
+.bk-card {
+  background: #14142a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: opacity 0.2s, border-color 0.2s;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+.bk-card:hover          { border-color: rgba(212,168,67,0.22); }
+.bk-card.is-cancelled   { opacity: 0.55; }
+
+/* Top bar */
+.bk-card-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+}
+.bk-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bk-topbar-price {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #d4a843;
   white-space: nowrap;
 }
-.bk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* FIX #1: gold-fill button has max contrast in any theme (dark text on gold) */
-.bk-btn--primary { background: var(--gold); color: var(--ink-on-gold); border-color: var(--gold); }
-.bk-btn--primary:hover { background: var(--gold-light); border-color: var(--gold-light); }
-
-.bk-btn--gold { background: transparent; color: var(--gold); border-color: var(--gold); }
-.bk-btn--gold:hover { background: var(--gold-dim); }
-
-.bk-btn--danger { background: transparent; color: var(--error); border-color: rgba(255, 77, 77, 0.4); }
-.bk-btn--danger:hover { background: rgba(255, 77, 77, 0.08); border-color: var(--error); }
-
-.bk-btn--ghost { background: transparent; color: var(--muted); border-color: var(--border-dim); }
-.bk-btn--ghost:hover { color: var(--gold); border-color: var(--gold); }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   DETAIL PANEL — FIX #1 (all label/value text uses explicit tokens)
-═══════════════════════════════════════════════════════════════════════ */
-.bk-detail-panel {
-  background: rgba(0, 0, 0, 0.22);
-  border-top: 1px solid var(--border-dim);
-  padding: 22px 28px;
+/* Badge variants */
+.fc-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 20px;
 }
-[data-theme="light"] .bk-detail-panel { background: rgba(0, 0, 0, 0.03); }
+.fc-badge.success   { background: rgba(40,167,69,0.15);   color: #4caf7d; border: 1px solid rgba(40,167,69,0.3); }
+.fc-badge.pending   { background: rgba(255,193,7,0.12);   color: #ffc107; border: 1px solid rgba(255,193,7,0.3); }
+.fc-badge.cancelled { background: rgba(255,77,77,0.12);   color: #ff6b6b; border: 1px solid rgba(255,77,77,0.3); }
 
+.bk-ref-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #888;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-family: monospace;
+}
+.bk-checkedin-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  color: #4caf7d;
+  background: rgba(40,167,69,0.1);
+  border: 1px solid rgba(40,167,69,0.25);
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+
+/* Route row */
+.bk-route-row {
+  display: flex;
+  align-items: center;
+  padding: 20px 20px 16px;
+  gap: 12px;
+}
+.bk-endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.bk-endpoint--right { text-align: right; }
+.bk-iata {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.bk-city   { font-size: 0.72rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-time   { font-size: 0.95rem; font-weight: 700; color: #e0e0e0; margin-top: 4px; }
+.bk-date   { font-size: 0.7rem; color: #777; }
+
+/* Flight timeline */
+.bk-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  min-width: 100px;
+}
+.bk-duration { font-size: 0.7rem; color: #888; letter-spacing: 0.04em; }
+.bk-line-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0;
+}
+.bk-line-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(212,168,67,0.5);
+  flex-shrink: 0;
+}
+.bk-line-track {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(212,168,67,0.3), rgba(212,168,67,0.6), rgba(212,168,67,0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.bk-plane-icon {
+  color: #d4a843;
+  font-size: 0.85rem;
+  background: #14142a;
+  padding: 0 4px;
+  position: relative;
+}
+.bk-airline { font-size: 0.68rem; color: #777; text-align: center; }
+
+/* Action buttons */
+.bk-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 16px;
+  flex-wrap: wrap;
+}
+.bk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s, transform 0.1s;
+  border: 1px solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bk-btn:active          { transform: scale(0.96); }
+.bk-btn:disabled        { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+
+.bk-btn--checkin {
+  background: rgba(212,168,67,0.12);
+  color: #d4a843;
+  border-color: rgba(212,168,67,0.4);
+}
+.bk-btn--checkin:hover  { background: rgba(212,168,67,0.22); }
+
+.bk-btn--rebook {
+  background: transparent;
+  color: #8ecdf7;
+  border-color: rgba(142,205,247,0.4);
+}
+.bk-btn--rebook:hover   { background: rgba(142,205,247,0.08); }
+
+.bk-btn--cancel {
+  background: transparent;
+  color: #ff7070;
+  border-color: rgba(255,112,112,0.4);
+}
+.bk-btn--cancel:hover   { background: rgba(255,112,112,0.08); }
+
+.bk-btn--details {
+  background: transparent;
+  color: #777;
+  border-color: rgba(255,255,255,0.1);
+  margin-left: auto;
+}
+.bk-btn--details:hover  { color: #d4a843; border-color: rgba(212,168,67,0.4); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   DETAIL PANEL
+───────────────────────────────────────────────────────────────────────── */
+.bk-detail {
+  background: #0f0f22;
+  border-top: 1px solid rgba(212,168,67,0.12);
+  padding: 20px 20px 22px;
+}
 .bk-detail-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 18px 16px;
+  gap: 16px 12px;
   margin-bottom: 20px;
 }
-.bk-detail-cell  { display: flex; flex-direction: column; gap: 5px; }
-
-/* FIX #1: was missing color, falling back to inherited dark glass tint */
-.bk-detail-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
+@media (max-width: 580px) {
+  .bk-detail-grid { grid-template-columns: repeat(2, 1fr); }
 }
-.bk-detail-value {
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--text);
-}
-.bk-detail-sub  { color: var(--muted); font-weight: 400; margin-left: 2px; }
-.bk-detail-mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 0.78rem; letter-spacing: 0.04em; }
+.bk-ditem   { display: flex; flex-direction: column; gap: 4px; }
+.bk-dlabel  { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.09em; color: #666; }
+.bk-dvalue  { font-size: 0.88rem; color: #ddd; font-weight: 500; }
+.bk-dsub    { color: #777; font-weight: 400; }
+.bk-mono    { font-family: monospace; font-size: 0.8rem; letter-spacing: 0.03em; }
 
 .bk-seat-badge {
   display: inline-block;
-  font-size: 0.62rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 20px;
   margin-left: 6px;
   text-transform: capitalize;
 }
-.bk-seat-badge--economy  { background: rgba(46, 204, 113, 0.15); color: var(--success); }
-.bk-seat-badge--business { background: var(--gold-dim); color: var(--gold); }
-.bk-seat-badge--first    { background: rgba(111, 66, 193, 0.18); color: #b07eef; }
+.bk-seat-badge.economy  { background: rgba(40,167,69,0.15);   color: #4caf7d; }
+.bk-seat-badge.business { background: rgba(212,168,67,0.15);  color: #d4a843; }
+.bk-seat-badge.first    { background: rgba(111,66,193,0.18);  color: #b07eef; }
 
-.bk-timebar {
+.bk-times {
   display: flex;
   align-items: center;
   gap: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-dim);
-  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
-.bk-timebar-block { display: flex; flex-direction: column; gap: 3px; }
-.bk-timebar-time  { font-family: var(--font-serif); font-size: 1.3rem; font-weight: 700; color: var(--text); line-height: 1; }
-.bk-timebar-date  { font-size: 0.72rem; color: var(--muted); }
-.bk-timebar-arrow { color: var(--gold); font-size: 1.1rem; flex-shrink: 0; }
+.bk-tblock  { display: flex; flex-direction: column; gap: 3px; }
+.bk-tbig    { font-size: 1.5rem; font-weight: 800; color: #fff; line-height: 1; }
+.bk-tdate   { font-size: 0.72rem; color: #888; }
+.bk-tarrow  { color: #d4a843; font-size: 1.1rem; }
 
-/* Detail panel slide transition */
-.bk-slide-enter-active, .bk-slide-leave-active {
+/* Slide transition for detail panel */
+.bk-slide-enter-active,
+.bk-slide-leave-active {
   transition: max-height 0.28s ease, opacity 0.22s ease;
-  max-height: 500px;
   overflow: hidden;
+  max-height: 400px;
 }
-.bk-slide-enter-from, .bk-slide-leave-to { max-height: 0; opacity: 0; }
+.bk-slide-enter-from,
+.bk-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   REBOOK MODAL — FIX #2 (full overhaul) + FIX #3 (responsive)
-═══════════════════════════════════════════════════════════════════════ */
-
-/* FIX #3: overlay scrolls so modal never clips on small screens */
+/* ─────────────────────────────────────────────────────────────────────────
+   REBOOK MODAL
+───────────────────────────────────────────────────────────────────────── */
 .rb-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(0,0,0,0.8);
   backdrop-filter: blur(4px);
   z-index: 1050;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  overflow-y: auto;
 }
-
 .rb-modal {
-  background: var(--bg-60-surface);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  background: #11112a;
+  border: 1px solid rgba(212,168,67,0.2);
+  border-radius: 16px;
   width: 100%;
-  max-width: 560px;
+  max-width: 540px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
-  margin: auto;   /* keeps it centered in the scrollable overlay */
+  box-shadow: 0 16px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(212,168,67,0.06);
 }
 
-/* Header */
+/* Modal header */
 .rb-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 22px 16px;
-  border-bottom: 1px solid var(--border-dim);
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
   flex-shrink: 0;
 }
 .rb-header-icon {
-  width: 38px; height: 38px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: var(--gold-dim);
-  color: var(--gold);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem; flex-shrink: 0;
+  background: rgba(212,168,67,0.1);
+  border: 1px solid rgba(212,168,67,0.25);
+  color: #d4a843;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
 }
-.rb-header-text { flex: 1; min-width: 0; }
-.rb-header-title { font-size: 0.95rem; font-weight: 700; color: var(--text); margin: 0; line-height: 1.3; }
-.rb-header-sub   { font-size: 0.72rem; color: var(--muted); margin: 3px 0 0; }
+.rb-modal-title {
+  font-size: 0.97rem;
+  font-weight: 700;
+  color: #e8e8e8;
+  margin: 0;
+}
+.rb-modal-sub {
+  font-size: 0.72rem;
+  color: #888;
+  margin: 3px 0 0;
+}
+.rb-ref-inline { color: #d4a843; font-size: 0.85rem; }
 
 .rb-close {
-  background: transparent; border: none;
-  color: var(--muted); font-size: 1rem; cursor: pointer;
-  padding: 6px; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
   transition: color 0.15s, background 0.15s;
   flex-shrink: 0;
 }
-.rb-close:hover:not(:disabled) { color: var(--text); background: var(--border-dim); }
-.rb-close:disabled { opacity: 0.35; cursor: not-allowed; }
+.rb-close:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,0.07); }
+.rb-close:disabled              { opacity: 0.35; cursor: not-allowed; }
 
 .rb-back {
   background: transparent;
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
-  color: var(--muted); font-size: 0.9rem;
-  cursor: pointer; padding: 5px 10px;
-  display: flex; align-items: center;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: #aaa;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 5px 10px;
   transition: color 0.15s, border-color 0.15s;
   flex-shrink: 0;
 }
-.rb-back:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
-.rb-back:disabled { opacity: 0.35; cursor: not-allowed; }
+.rb-back:hover:not(:disabled) { color: #fff; border-color: rgba(255,255,255,0.3); }
+.rb-back:disabled              { opacity: 0.35; cursor: not-allowed; }
 
-/* Confirm body */
-.rb-confirm-body { padding: 22px; }
+/* Step 1: confirm body */
+.rb-confirm-body {
+  padding: 22px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
 
+/* Summary card */
 .rb-summary-card {
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  border-radius: 10px;
-  padding: 20px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 18px 18px 14px;
   margin-bottom: 16px;
 }
-.rb-summary-endpoints {
+.rb-summary-airports {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rb-sum-endpoint          { display: flex; flex-direction: column; gap: 3px; }
+.rb-sum-endpoint--right   { text-align: right; }
+.rb-sum-iata  { font-size: 1.6rem; font-weight: 900; color: #fff; line-height: 1; }
+.rb-sum-city  { font-size: 0.68rem; color: #888; }
+.rb-sum-time  { font-size: 0.85rem; font-weight: 700; color: #d4a843; margin-top: 3px; }
+
+.rb-sum-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+}
+.rb-sum-duration { font-size: 0.68rem; color: #888; }
+.rb-sum-track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.rb-sum-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(212,168,67,0.5);
+  flex-shrink: 0;
+}
+.rb-sum-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg,
+    rgba(212,168,67,0.3), rgba(212,168,67,0.6), rgba(212,168,67,0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rb-sum-plane {
+  color: #d4a843;
+  font-size: 0.78rem;
+  background: #11112a;
+  padding: 0 4px;
+}
+.rb-sum-airline { font-size: 0.65rem; color: #777; }
+
+.rb-summary-date {
+  font-size: 0.78rem;
+  color: #aaa;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 10px;
+}
+
+/* Notice */
+.rb-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(212,168,67,0.06);
+  border: 1px solid rgba(212,168,67,0.18);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.rb-notice-icon { color: #d4a843; font-size: 0.95rem; flex-shrink: 0; margin-top: 1px; }
+.rb-notice-text { font-size: 0.8rem; color: #bbb; line-height: 1.55; margin: 0; }
+
+/* Route strip */
+.rb-route-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: rgba(212,168,67,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rb-strip-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rb-strip-iata    { font-size: 1rem; font-weight: 800; color: #fff; }
+.rb-strip-arrow   { color: #d4a843; font-size: 0.85rem; }
+.rb-strip-current { font-size: 0.75rem; color: #888; }
+
+/* Step 2: search body */
+.rb-search-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.rb-section { margin-bottom: 20px; }
+.rb-section:last-child { margin-bottom: 0; }
+.rb-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #888;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+/* Step indicators */
+.rb-steps {
+  display: flex;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.rb-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+.rb-step.active { opacity: 1; }
+.rb-step.done   { opacity: 0.65; }
+.rb-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(212,168,67,0.12);
+  border: 1px solid rgba(212,168,67,0.35);
+  color: #d4a843;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.rb-step.done .rb-step-num { background: rgba(212,168,67,0.22); }
+.rb-step-label { font-size: 0.72rem; color: #ccc; white-space: nowrap; }
+.rb-step-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 0 10px;
+  min-width: 18px;
+}
+
+/* Date row */
+.rb-date-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.rb-date-input { flex: 1; }
+.rb-search-btn { white-space: nowrap; flex-shrink: 0; }
+
+/* Flight list */
+.rb-flight-list { display: flex; flex-direction: column; gap: 8px; }
+.rb-flight-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
-}
-.rb-summary-ep           { display: flex; flex-direction: column; gap: 4px; }
-.rb-summary-ep--right    { text-align: right; }
-/* FIX #1: IATA codes need var(--text) to show in light mode */
-.rb-summary-iata {
-  font-family: var(--font-serif);
-  font-size: 1.65rem; font-weight: 900;
-  color: var(--text); line-height: 1; letter-spacing: 0.04em;
-}
-.rb-summary-city { font-size: 0.68rem; color: var(--muted); }
-.rb-summary-time { font-size: 0.82rem; font-weight: 600; color: var(--gold); margin-top: 2px; }
-
-.rb-summary-track {
-  flex: 1;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 0 10px;
-}
-.rb-summary-duration  { font-size: 0.65rem; color: var(--muted); }
-.rb-summary-track-line {
-  width: 100%; height: 1px;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
   position: relative;
+  outline: none;
 }
-.rb-summary-plane {
-  color: var(--gold); font-size: 0.8rem;
-  background: var(--bg-60-surface); padding: 0 5px;
-}
-.rb-summary-airline { font-size: 0.65rem; color: var(--muted); }
+.rb-flight-row:hover    { border-color: rgba(212,168,67,0.4); background: rgba(212,168,67,0.04); }
+.rb-flight-row.selected { border-color: #d4a843; background: rgba(212,168,67,0.08); }
+.rb-flight-row:focus-visible { box-shadow: 0 0 0 2px #d4a843; }
 
-.rb-summary-datebar {
-  font-size: 0.76rem; color: var(--muted);
-  border-top: 1px solid var(--border-dim); padding-top: 12px;
-}
+.rb-flight-left  { display: flex; flex-direction: column; gap: 4px; }
+.rb-flight-times { display: flex; align-items: center; gap: 4px; }
+.rb-ftime        { font-size: 0.95rem; font-weight: 800; color: #e8e8e8; }
+.rb-time-arrow   { color: #888; font-size: 0.75rem; }
+.rb-flight-meta  { font-size: 0.75rem; color: #888; }
+.rb-flight-dur   { margin-left: 8px; color: #666; }
 
-/* Notice box */
-.rb-notice {
-  display: flex; gap: 10px; align-items: flex-start;
-  background: var(--gold-dim);
-  border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 16px;
-  font-size: 0.8rem;
-  color: var(--text);   /* FIX #1 */
-  line-height: 1.55;
-}
-.rb-notice-icon { color: var(--gold); font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
-
-/* Route strip */
-.rb-route-strip {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 22px;
-  background: var(--gold-dim);
-  border-top: 1px solid var(--border-dim);
-  border-bottom: 1px solid var(--border-dim);
-  flex-wrap: wrap; flex-shrink: 0;
-}
-.rb-route-iata   { font-weight: 800; font-size: 0.95rem; color: var(--text); }
-.rb-route-arrow  { color: var(--gold); font-size: 0.85rem; }
-.rb-route-current { margin-left: auto; font-size: 0.72rem; color: var(--muted); }
-
-/* Progress strip */
-.rb-progress {
-  display: flex; align-items: center;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--border-dim);
-  gap: 0; flex-shrink: 0;
-}
-.rb-progress-step {
-  display: flex; align-items: center; gap: 7px;
-  opacity: 0.3; transition: opacity 0.2s ease;
-}
-.rb-progress-step.is-active { opacity: 1; }
-.rb-progress-step.is-done   { opacity: 0.65; }
-.rb-progress-num {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold);
-  color: var(--gold);
-  font-size: 0.68rem; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
+.rb-flight-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-shrink: 0;
 }
-.rb-progress-step.is-done .rb-progress-num {
-  background: var(--gold); color: var(--ink-on-gold);
-}
-/* FIX #1: label was inheriting glass color instead of the text token */
-.rb-progress-label {
-  font-size: 0.68rem; font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-}
-.rb-progress-line { flex: 1; height: 1px; background: var(--border-dim); margin: 0 10px; }
-
-/* Scrollable modal body */
-.rb-body {
-  padding: 20px 22px;
-  overflow-y: auto;   /* FIX #3: inner scroll, not modal clip */
-  flex: 1;
-  display: flex; flex-direction: column; gap: 20px;
-  max-height: 55vh;   /* FIX #3: defined max prevents unbounded growth on desktop */
-}
-
-.rb-field-group { display: flex; flex-direction: column; gap: 10px; }
-
-/* Date row */
-.rb-date-row   { display: flex; gap: 10px; align-items: center; }
-.rb-date-input { flex: 1; min-width: 0; }
-.rb-find-btn   { flex-shrink: 0; white-space: nowrap; padding: 10px 18px; }
-
-/* Flight list */
-.rb-flight-list { display: flex; flex-direction: column; gap: 8px; }
-
-.rb-flight-card {
-  display: flex; align-items: center;
-  justify-content: space-between;
-  gap: 12px; padding: 13px 16px;
-  border: 1px solid var(--border-dim);
-  border-radius: 8px; cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  position: relative;
-}
-.rb-flight-card:hover     { border-color: var(--border); background: var(--glass-bg-lt); }
-.rb-flight-card.is-selected { border-color: var(--gold); background: var(--gold-dim); }
-.rb-flight-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-
-.rb-fc-left  { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.rb-fc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-
-.rb-fc-times { display: flex; align-items: center; gap: 7px; }
-/* FIX #1 */
-.rb-fc-time  { font-weight: 700; font-size: 0.95rem; color: var(--text); }
-.rb-fc-arrow { color: var(--muted); font-size: 0.75rem; }
-
-.rb-fc-meta {
-  display: flex; align-items: center; gap: 5px;
-  flex-wrap: wrap;
-  font-size: 0.72rem; color: var(--muted);
-}
-.rb-fc-dot { opacity: 0.5; }
-
-.rb-fc-price { font-size: 0.92rem; font-weight: 700; color: var(--gold); }
-.rb-fc-check { color: var(--gold); font-size: 0.9rem; }
+.rb-flight-price { font-size: 0.95rem; font-weight: 800; color: #d4a843; }
+.rb-tick         { color: #d4a843; font-size: 1rem; }
 
 /* Seat grid */
-.rb-seat-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-
+.rb-seat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .rb-seat {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  width: 54px; height: 50px;
-  border: 1px solid var(--border-dim);
-  border-radius: 7px;
-  background: var(--glass-bg-lt);
-  color: var(--muted);   /* FIX #1: explicit, not inherited */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 54px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  color: #ccc;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-  padding: 3px; flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
 }
-.rb-seat:hover                   { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
-.rb-seat.is-selected             { border-color: var(--gold); background: var(--gold); color: var(--ink-on-gold); }
-.rb-seat.is-business             { border-color: rgba(212, 175, 55, 0.35); }
-.rb-seat.is-first                { border-color: rgba(111, 66, 193, 0.35); }
-.rb-seat.is-first.is-selected   { background: #7c4dcc; border-color: #7c4dcc; color: #fff; }
+.rb-seat:hover             { border-color: #d4a843; color: #d4a843; transform: translateY(-1px); }
+.rb-seat.selected          { border-color: #d4a843; background: rgba(212,168,67,0.14); color: #d4a843; }
+.rb-seat.business          { border-color: rgba(212,168,67,0.28); }
+.rb-seat.first             { border-color: rgba(111,66,193,0.32); }
+.rb-seat.first.selected    { background: rgba(111,66,193,0.15); color: #b07eef; border-color: #b07eef; }
+.rb-seat-num { font-size: 0.85rem; font-weight: 800; line-height: 1; }
+.rb-seat-cls { font-size: 0.58rem; text-transform: capitalize; opacity: 0.6; margin-top: 2px; }
 
-.rb-seat-num { font-size: 0.82rem; font-weight: 700; line-height: 1; }
-.rb-seat-cls { font-size: 0.56rem; text-transform: capitalize; opacity: 0.7; margin-top: 2px; }
-
-/* Seat legend */
-.rb-seat-legend { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 10px; }
-.rb-legend-item {
-  font-size: 0.65rem; font-weight: 600;
-  display: flex; align-items: center; gap: 5px;
-  color: var(--muted);
-}
-.rb-legend-item::before {
-  content: ''; display: inline-block;
-  width: 12px; height: 12px; border-radius: 3px; border: 1px solid;
-}
-.rb-legend-economy::before  { border-color: var(--border-dim); background: var(--glass-bg-lt); }
-.rb-legend-business::before { border-color: rgba(212, 175, 55, 0.5); background: var(--gold-dim); }
-.rb-legend-first::before    { border-color: rgba(111, 66, 193, 0.5); background: rgba(111, 66, 193, 0.12); }
-
-/* Loading / empty seat states */
+/* Seats loading */
 .rb-seats-loading {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 0.82rem; color: var(--muted); padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #888;
+  font-size: 0.82rem;
+  padding: 10px 0;
 }
-.rb-seats-empty { font-size: 0.82rem; color: var(--muted); padding: 8px 0; }
+.rb-no-seats { font-size: 0.82rem; color: #777; margin: 0; }
 
-/* Error message */
-.rb-error-msg {
-  display: flex; align-items: center;
-  background: rgba(255, 77, 77, 0.1);
-  border: 1px solid rgba(255, 77, 77, 0.35);
-  color: var(--error);
-  font-size: 0.82rem; padding: 10px 14px; border-radius: 6px;
+/* Error */
+.rb-error {
+  background: rgba(255,77,77,0.1);
+  border: 1px solid rgba(255,77,77,0.28);
+  color: #ff8080;
+  border-radius: 9px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  margin-top: 12px;
 }
 
 /* Footer */
 .rb-footer {
-  display: flex; gap: 10px; justify-content: flex-end;
-  padding: 14px 22px;
-  border-top: 1px solid var(--border-dim);
-  flex-shrink: 0; flex-wrap: wrap;
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
 }
 
 /* Modal buttons */
 .rb-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  gap: 6px; padding: 10px 22px; border-radius: 6px;
-  font-family: var(--font-sans); font-size: 0.74rem; font-weight: 700;
-  letter-spacing: 0.05em; border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  font-size: 0.85rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s, color 0.15s, opacity 0.15s, transform 0.1s;
+  border: 1px solid transparent;
   white-space: nowrap;
 }
-.rb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.rb-btn:active { transform: scale(0.97); }
+.rb-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
-.rb-btn--primary { background: var(--gold); color: var(--ink-on-gold); border-color: var(--gold); }
-.rb-btn--primary:hover:not(:disabled) { background: var(--gold-light); border-color: var(--gold-light); }
+.rb-btn--primary {
+  background: #d4a843;
+  color: #0e0e1a;
+  border-color: #d4a843;
+  flex: 1;
+}
+.rb-btn--primary:hover:not(:disabled) { background: #e0b84d; }
 
-.rb-btn--cancel { background: transparent; color: var(--muted); border-color: var(--border-dim); }
-.rb-btn--cancel:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
+.rb-btn--ghost {
+  background: transparent;
+  color: #aaa;
+  border-color: rgba(255,255,255,0.14);
+}
+.rb-btn--ghost:hover:not(:disabled) { color: #fff; border-color: rgba(255,255,255,0.3); }
 
-/* Modal entrance transitions */
-.rb-fade-enter-active, .rb-fade-leave-active { transition: opacity 0.22s ease; }
-.rb-fade-enter-from, .rb-fade-leave-to       { opacity: 0; }
-
-.rb-slide-up-enter-active, .rb-slide-up-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
-.rb-slide-up-enter-from, .rb-slide-up-leave-to       { opacity: 0; transform: translateY(18px); }
-
-/* Light-mode modal surfaces */
-[data-theme="light"] .rb-modal        { background: var(--bg-60-mid); border-color: var(--glass-border); }
-[data-theme="light"] .rb-summary-card { background: rgba(255, 255, 255, 0.65); border-color: var(--border-dim); }
-[data-theme="light"] .rb-summary-plane { background: var(--bg-60-mid); }
-[data-theme="light"] .rb-seat         { background: rgba(255, 255, 255, 0.5); }
-[data-theme="light"] .rb-flight-card:hover { background: rgba(255, 255, 255, 0.55); }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   FIX #3 — RESPONSIVE LAYOUT
-   Three breakpoints handle the transition from desktop → tablet → phone
-   without any overlap or clipping.
-═══════════════════════════════════════════════════════════════════════ */
-
-/* ── 768 px — tablet ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .bk-page-wrap { padding-top: 60px; padding-bottom: 60px; }
-
-  /* Flight row: 3-col (origin | track | dest), action panel drops below full-width */
-  .bk-flight-row {
-    grid-template-columns: 1fr auto 1fr;
-    grid-template-rows: auto auto;
-    padding: 20px 18px;
-    gap: 0 0;
-  }
-  .bk-action-panel {
-    grid-column: 1 / -1;    /* span all three columns */
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    border-left: none;
-    border-top: 1px solid var(--border-dim);
-    padding: 14px 0 0 0;
-    min-width: unset;
-    gap: 8px;
-    margin-top: 16px;
-  }
-  .bk-price { font-size: 1.1rem; }
-
-  /* Horizontal button stack */
-  .bk-btn-stack {
-    flex-direction: row;
-    flex-wrap: wrap;
-    width: auto;
-    flex: 1;
-    justify-content: flex-end;
-    margin-top: 0;
-  }
-  .bk-btn { width: auto; }
-
-  /* Detail panel: 2 columns */
-  .bk-detail-grid { grid-template-columns: repeat(2, 1fr); }
-
-  /* Modal alignment: push to top so it scrolls naturally on tablet */
-  .rb-overlay { align-items: flex-start; padding-top: 24px; padding-bottom: 24px; }
-  .rb-modal   { max-width: 100%; }
-  .rb-body    { max-height: 60vh; }
-  .rb-summary-iata { font-size: 1.3rem; }
+/* Inline spinner */
+.rb-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(14,14,26,0.3);
+  border-top-color: #0e0e1a;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
 }
 
-/* ── 520 px — phone ──────────────────────────────────────────────────── */
-@media (max-width: 520px) {
-  /* Fully single-column card */
-  .bk-flight-row {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    padding: 18px 16px;
-  }
-  .bk-endpoint         { flex-direction: row; align-items: baseline; gap: 10px; }
-  .bk-endpoint--right  { justify-content: flex-end; text-align: right; }
-  .bk-time             { font-size: 1.3rem; }
+/* ─────────────────────────────────────────────────────────────────────────
+   MODAL TRANSITIONS
+───────────────────────────────────────────────────────────────────────── */
+.rb-fade-enter-active,
+.rb-fade-leave-active { transition: opacity 0.22s ease; }
+.rb-fade-enter-from,
+.rb-fade-leave-to     { opacity: 0; }
 
-  /* Track goes horizontal on phone */
-  .bk-track { flex-direction: row; align-items: center; min-width: unset; padding: 0; }
-  .bk-track-line { flex: 1; }
+.rb-slide-up-enter-active { transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; }
+.rb-slide-up-leave-active { transition: transform 0.2s ease, opacity 0.18s ease; }
+.rb-slide-up-enter-from   { transform: translateY(24px) scale(0.97); opacity: 0; }
+.rb-slide-up-leave-to     { transform: translateY(12px) scale(0.98); opacity: 0; }
 
-  /* Action panel: stack everything */
-  .bk-action-panel {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: left;
-    margin-top: 0;
-  }
-  .bk-btn-stack { flex-direction: column; width: 100%; }
-  .bk-btn       { width: 100%; }
-
-  /* Detail panel: 1 column */
-  .bk-detail-grid { grid-template-columns: 1fr; }
-
-  /* Guest row stacks */
-  .bk-guest-row { flex-direction: column; }
-  .bk-guest-btn { width: 100%; }
-
-  /* Modal sheet-from-bottom on phones */
-  .rb-overlay { padding: 0; align-items: flex-end; }
-  .rb-modal   { border-radius: 14px 14px 0 0; max-height: 92vh; }
-  .rb-body    { max-height: 45vh; }
-
-  /* Confirm summary: wrap endpoints */
-  .rb-summary-endpoints { flex-wrap: wrap; gap: 14px; }
-  .rb-summary-track     { min-width: 100%; order: 3; flex-direction: row; }
-
-  /* Date row stacks */
-  .rb-date-row { flex-direction: column; }
-  .rb-find-btn { width: 100%; }
-
-  /* Footer buttons stack */
-  .rb-footer { flex-direction: column; }
-  .rb-btn    { width: 100%; justify-content: center; }
-
-  /* Flight card stacks */
-  .rb-flight-card { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .rb-fc-right    { flex-direction: row; align-items: center; gap: 12px; }
+/* ─────────────────────────────────────────────────────────────────────────
+   UTILITIES
+───────────────────────────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
+.gold { color: #d4a843; font-style: italic; }
+.gold-link { color: #d4a843; text-decoration: none; }
+.gold-link:hover { text-decoration: underline; }
 </style>
