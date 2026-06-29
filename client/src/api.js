@@ -317,6 +317,28 @@ export const getFlightStatus = (flightNumber, date) =>
 export const adminUpdatePassenger = (passengerId, payload) =>
     api.patch(`/admin/passengers/${passengerId}`, payload);
 
+// ── ADDITIONAL MISSING EXPORTS ───────────────────────────────────────
+
+/**
+ * Fetches the logged-in user's payment history
+ * GET /payments/my-payments or your backend equivalent
+ */
+export const getMyPaymentsUser = () => 
+    api.get('/payments/my-payments');
+
+/**
+ * Performs a check-in action for an authenticated user
+ * POST /bookings/check-in/user or your backend equivalent
+ */
+export const checkInBookingUser = (payload) => 
+    api.post('/bookings/check-in/user', payload);
+
+/**
+ * Performs a check-in action for a guest checkout flow
+ * POST /bookings/check-in/guest or your backend equivalent
+ */
+export const checkInBookingGuest = (payload) => 
+    api.post('/bookings/check-in/guest', payload);
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
