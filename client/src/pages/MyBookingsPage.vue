@@ -63,6 +63,60 @@ const selectedSeatObj = computed(() =>
   rebookSeats.value.find(s => s._id === selectedSeatId.value) || null
 )
 
+// Function to handle the passenger seat update during rebooking
+const handleRebookSeatSubmission = async () => {
+  if (!rebookTarget.value || !selectedSeatId.value) {
+    rebookError.value = 'Please select a valid seat.'
+    return
+  }
+
+  rebookSubmitting.value = true
+  rebookError.value = ''
+
+  // Build payload using your rebook state variables
+  const payload = {
+    bookingId: rebookTarget.value._id,       // The active booking being rescheduled
+    passengerId: rebookTarget.value.passengerId, // The passenger tied to this booking
+    seatId: selectedSeatId.value             // The newly selected seat ID
+  }
+
+  try {
+    // If you have a guest email input field on this page, include it for guest checkout
+    if (!isLoggedIn.value && guestEmailInput.value) {
+      payload.guestEmail = guestEmailInput.value
+    }
+
+    // Call your backend API via axios or fetch
+    // Replace URL path below if your backend route differs
+    const response = await fetch('/api/booking-passengers', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(isLoggedIn.value && { 'Authorization': `Bearer ${globalStore.user.token}` })
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update seat reservation.')
+    }
+
+    // Handle success: close modal, clear seat, and refresh your bookings list
+    rebookStep.value = null
+    selectedSeatId.value = ''
+    await fetchBookings() // Calls your list refresher function
+    
+  } catch (err) {
+    rebookError.value = err.message || 'An error occurred while saving your seat.'
+    console.error('Rebook seat assignment failed:', err)
+  } finally {
+    rebookSubmitting.value = false
+  }
+}
+
+
 async function openRebookModal(booking) {
   rebookTarget.value     = booking
   rebookStep.value       = 'confirm'
