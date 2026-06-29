@@ -13,7 +13,6 @@ import {
   getMyPassengers,
   getPassengerById,
   getSeatsByFlight,
-  getFlightById,
 } from '../api.js'
 
 const globalStore = useGlobalStore()
@@ -50,74 +49,7 @@ const rebookSeats       = ref([])
 const seatsLoading      = ref(false)
 const selectedSeatId    = ref('')
 
-// Resolved route IDs for the active rebook target. These are the values
-// that actually get sent to searchFlights() — never booking.flightId
-// directly — so the "Origin Airport ID required" failure mode can't recur
-// even if the booking list response is unpopulated or only shallow.
-const rebookOriginId    = ref('')
-const rebookDestId      = ref('')
-
-// Derived: the full seat object behind the currently selected seat id —
-// used to render the seat-confirmation badge once a seat is chosen.
-const selectedSeatObj = computed(() =>
-  rebookSeats.value.find(s => s._id === selectedSeatId.value) || null
-)
-
-// Function to handle the passenger seat update during rebooking
-const handleRebookSeatSubmission = async () => {
-  if (!rebookTarget.value || !selectedSeatId.value) {
-    rebookError.value = 'Please select a valid seat.'
-    return
-  }
-
-  rebookSubmitting.value = true
-  rebookError.value = ''
-
-  // Build payload using your rebook state variables
-  const payload = {
-    bookingId: rebookTarget.value._id,       // The active booking being rescheduled
-    passengerId: rebookTarget.value.passengerId, // The passenger tied to this booking
-    seatId: selectedSeatId.value             // The newly selected seat ID
-  }
-
-  try {
-    // If you have a guest email input field on this page, include it for guest checkout
-    if (!isLoggedIn.value && guestEmailInput.value) {
-      payload.guestEmail = guestEmailInput.value
-    }
-
-    // Call your backend API via axios or fetch
-    // Replace URL path below if your backend route differs
-    const response = await fetch('/api/booking-passengers', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(isLoggedIn.value && { 'Authorization': `Bearer ${globalStore.user.token}` })
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to update seat reservation.')
-    }
-
-    // Handle success: close modal, clear seat, and refresh your bookings list
-    rebookStep.value = null
-    selectedSeatId.value = ''
-    await fetchBookings() // Calls your list refresher function
-    
-  } catch (err) {
-    rebookError.value = err.message || 'An error occurred while saving your seat.'
-    console.error('Rebook seat assignment failed:', err)
-  } finally {
-    rebookSubmitting.value = false
-  }
-}
-
-
-async function openRebookModal(booking) {
+function openRebookModal(booking) {
   rebookTarget.value     = booking
   rebookStep.value       = 'confirm'
   rebookDate.value       = ''
@@ -129,35 +61,6 @@ async function openRebookModal(booking) {
   rebookSeats.value      = []
   seatsLoading.value     = false
   selectedSeatId.value   = ''
-  rebookOriginId.value   = ''
-  rebookDestId.value     = ''
-
-  // booking.flightId is usually already populated by enrichBooking()'s
-  // backfill by the time we get here. This is a safety net for the rare
-  // case that backfill failed silently (caught error) — we resolve real
-  // origin/destination IDs before the user can reach the search step, so
-  // "Find" never fires with an undefined origin again.
-  const flightRef = booking.flightId
-  let originId = flightRef?.originAirportId?._id || flightRef?.originAirportId
-  let destId   = flightRef?.destinationAirportId?._id || flightRef?.destinationAirportId
-
-  if (!originId || !destId) {
-    try {
-      const flightId = flightRef?._id || flightRef
-      const fRes      = await getFlightById(flightId)
-      const flight     = fRes?.result || fRes?.flight || fRes
-      if (flight) {
-        booking.flightId = flight   // also fixes the card behind the modal
-        originId = flight.originAirportId?._id || flight.originAirportId
-        destId   = flight.destinationAirportId?._id || flight.destinationAirportId
-      }
-    } catch {
-      rebookError.value = "Couldn't load this flight's route details."
-    }
-  }
-
-  rebookOriginId.value = originId || ''
-  rebookDestId.value   = destId   || ''
 }
 
 function proceedToSearch() { rebookStep.value = 'search' }
@@ -170,10 +73,6 @@ function closeRebookModal() {
 
 async function searchRebookFlights() {
   if (!rebookDate.value) { rebookError.value = 'Please pick a date.'; return }
-  if (!rebookOriginId.value || !rebookDestId.value) {
-    rebookError.value = 'Missing route info for this booking — try reopening the rebook dialog.'
-    return
-  }
   rebookLoading.value    = true
   rebookError.value      = ''
   rebookFlights.value    = []
@@ -181,7 +80,10 @@ async function searchRebookFlights() {
   rebookSeats.value      = []
   selectedSeatId.value   = ''
   try {
-    const res = await searchFlights(rebookOriginId.value, rebookDestId.value, rebookDate.value)
+    const b      = rebookTarget.value
+    const origin = b.flightId?.originAirportId?._id      || b.flightId?.originAirportId
+    const dest   = b.flightId?.destinationAirportId?._id || b.flightId?.destinationAirportId
+    const res    = await searchFlights(origin, dest, rebookDate.value)
     rebookFlights.value = res?.result || res?.flights || (Array.isArray(res) ? res : [])
     if (rebookFlights.value.length === 0)
       rebookError.value = 'No flights available on that date for this route.'
@@ -218,20 +120,11 @@ async function confirmRebook() {
       newFlightId: selectedFlightId.value,
       newSeatId:   selectedSeatId.value
     })
-
-    // Success: close the modal immediately, then refresh in the
-    // background. `rebookSubmitting` has to be cleared *before* we call
-    // closeRebookModal() — that function intentionally refuses to close
-    // while a request is in flight (so a stray click mid-submit can't
-    // dismiss it), so leaving the flag true here (as the old `finally`
-    // did) made the modal silently fail to close on success.
-    rebookSubmitting.value = false
     closeRebookModal()
-
-    if (isLoggedIn.value) await loadBookings()
-    else await lookupGuestBookings()
+    await loadBookings()
   } catch (err) {
     rebookError.value = err.response?.data?.message || 'Rebook failed. Please try again.'
+  } finally {
     rebookSubmitting.value = false
   }
 }
@@ -271,25 +164,6 @@ function isUpcoming(booking) {
 
 // ── Enrich a single booking with passenger + seat data ────────────────────
 async function enrichBooking(b, passengerMap = new Map()) {
-  // ── Self-heal an unpopulated/shallow flightId ────────────────────────
-  // getMyBookingsUser/Guest don't reliably deep-populate flightId, which is
-  // why cards were showing "DEP"/"ARR" placeholders and the rebook search
-  // threw "Origin Airport ID required" — origin/destAirportId were missing
-  // because flightId was just a raw ObjectId string, not the populated doc.
-  try {
-    const flightRef   = b.flightId
-    const flightId     = (flightRef && typeof flightRef === 'object') ? flightRef._id : flightRef
-    const isPopulated = !!(flightRef && typeof flightRef === 'object' && flightRef.departureTime)
-
-    if (flightId && !isPopulated) {
-      const fRes  = await getFlightById(flightId)
-      const flight = fRes?.result || fRes?.flight || fRes
-      if (flight) b.flightId = flight
-    }
-  } catch {
-    // leave b.flightId as-is; template falls back to 'DEP'/'ARR'/'—'
-  }
-
   try {
     const bkpRes = await getPassengersByBooking(b._id)
     const bkp    = bkpRes?.result?.find(r => r.isActive) ?? bkpRes?.result?.[0]
@@ -422,40 +296,32 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
             <!-- Flight summary row -->
             <div class="bk-flight-row">
 
-              <!-- Tight center block: origin + track + destination move
-                   and size as one unit instead of stretching corner to
-                   corner. This is the wrapper that fixes the dead space. -->
-              <div class="bk-flight-info">
-
-                <!-- Origin -->
-                <div class="bk-endpoint">
-                  <div class="bk-time">{{ formatTime(booking.flightId?.departureTime) }}</div>
-                  <div class="bk-airport">
-                    {{ booking.flightId?.originAirportId?.city || booking.flightId?.originAirportId?.iataCode || 'DEP' }}
-                  </div>
-                  <div class="bk-date">{{ formatDateLabel(booking.flightId?.departureTime) }}</div>
+              <!-- Origin -->
+              <div class="bk-endpoint">
+                <div class="bk-time">{{ formatTime(booking.flightId?.departureTime) }}</div>
+                <div class="bk-airport">
+                  {{ booking.flightId?.originAirportId?.city || booking.flightId?.originAirportId?.iataCode || 'DEP' }}
                 </div>
-
-                <!-- Track -->
-                <div class="bk-track">
-                  <div class="bk-duration">{{ calcTravelTime(booking.flightId?.departureTime, booking.flightId?.arrivalTime) }}</div>
-                  <div class="bk-track-line">
-                    <span class="bk-plane-medallion"><i class="bi bi-airplane-fill"></i></span>
-                  </div>
-                  <div class="bk-airline-name">{{ booking.flightId?.airlineId?.name || '' }}</div>
-                </div>
-
-                <!-- Destination -->
-                <div class="bk-endpoint bk-endpoint--right">
-                  <div class="bk-time">{{ formatTime(booking.flightId?.arrivalTime) }}</div>
-                  <div class="bk-airport">
-                    {{ booking.flightId?.destinationAirportId?.city || booking.flightId?.destinationAirportId?.iataCode || 'ARR' }}
-                  </div>
-                  <div class="bk-date">{{ formatDateLabel(booking.flightId?.arrivalTime) }}</div>
-                </div>
-
+                <div class="bk-date">{{ formatDateLabel(booking.flightId?.departureTime) }}</div>
               </div>
-              <!-- /bk-flight-info -->
+
+              <!-- Track -->
+              <div class="bk-track">
+                <div class="bk-duration">{{ calcTravelTime(booking.flightId?.departureTime, booking.flightId?.arrivalTime) }}</div>
+                <div class="bk-track-line">
+                  <span class="bk-plane-medallion"><i class="bi bi-airplane-fill"></i></span>
+                </div>
+                <div class="bk-airline-name">{{ booking.flightId?.airlineId?.name || '' }}</div>
+              </div>
+
+              <!-- Destination -->
+              <div class="bk-endpoint bk-endpoint--right">
+                <div class="bk-time">{{ formatTime(booking.flightId?.arrivalTime) }}</div>
+                <div class="bk-airport">
+                  {{ booking.flightId?.destinationAirportId?.city || booking.flightId?.destinationAirportId?.iataCode || 'ARR' }}
+                </div>
+                <div class="bk-date">{{ formatDateLabel(booking.flightId?.arrivalTime) }}</div>
+              </div>
 
               <!-- Action panel -->
               <div class="bk-action-panel">
@@ -675,19 +541,10 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 
                 <!-- Date + search -->
                 <div class="rb-field-group">
-                  <div class="rb-field-label-row">
-                    <label class="f-label">Select a new date</label>
-                    <span class="rb-step-pill" :class="{ 'is-done': !!rebookDate }">
-                      <i v-if="rebookDate" class="bi bi-check-lg"></i>
-                      <template v-else>Step 1</template>
-                    </span>
-                  </div>
+                  <label class="f-label">Select a new date</label>
                   <div class="rb-date-row">
-                    <div class="rb-tip-anchor">
-                      <input type="date" class="f-input rb-date-input" v-model="rebookDate"
-                        :min="new Date().toISOString().slice(0, 10)" />
-                      <span class="rb-tip">Pick a date, then tap Find</span>
-                    </div>
+                    <input type="date" class="f-input rb-date-input" v-model="rebookDate"
+                      :min="new Date().toISOString().slice(0, 10)" />
                     <button class="rb-btn rb-btn--primary rb-find-btn"
                       :disabled="rebookLoading || !rebookDate" @click="searchRebookFlights">
                       <span v-if="rebookLoading" class="spinner-border spinner-border-sm"></span>
@@ -699,13 +556,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 
                 <!-- Flight list -->
                 <div v-if="rebookFlights.length > 0" class="rb-field-group">
-                  <div class="rb-field-label-row">
-                    <label class="f-label">Choose a flight</label>
-                    <span class="rb-step-pill" :class="{ 'is-done': !!selectedFlightId }">
-                      <i v-if="selectedFlightId" class="bi bi-check-lg"></i>
-                      <template v-else>Step 2</template>
-                    </span>
-                  </div>
+                  <label class="f-label">Choose a flight</label>
                   <div class="rb-flight-list">
                     <div
                       v-for="flight in rebookFlights" :key="flight._id"
@@ -717,7 +568,6 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
                       @keydown.enter="selectRebookFlight(flight._id)"
                       @keydown.space.prevent="selectRebookFlight(flight._id)"
                     >
-                      <span v-if="selectedFlightId !== flight._id" class="rb-fc-tooltip">Select to continue →</span>
                       <div class="rb-fc-left">
                         <div class="rb-fc-times">
                           <span class="rb-fc-time">{{ formatTimeOnly(flight.departureTime) }}</span>
@@ -742,13 +592,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 
                 <!-- Seat picker -->
                 <div v-if="selectedFlightId" class="rb-field-group">
-                  <div class="rb-field-label-row">
-                    <label class="f-label">Choose a seat</label>
-                    <span class="rb-step-pill" :class="{ 'is-done': !!selectedSeatId }">
-                      <i v-if="selectedSeatId" class="bi bi-check-lg"></i>
-                      <template v-else>Step 3</template>
-                    </span>
-                  </div>
+                  <label class="f-label">Choose a seat</label>
                   <div v-if="seatsLoading" class="rb-seats-loading">
                     <span class="spinner-border spinner-border-sm text-warning"></span>
                     <span>Loading seats…</span>
@@ -762,22 +606,12 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
                       class="rb-seat"
                       :class="{ 'is-selected': selectedSeatId === seat._id, 'is-business': seat.class === 'business', 'is-first': seat.class === 'first' }"
                       @click="selectedSeatId = seat._id"
-                      :data-tooltip="`${seat.seatNumber} · ${seatClassLabel(seat.class)}`"
-                      :aria-label="`Seat ${seat.seatNumber}, ${seat.class}`"
+                      :title="`${seat.seatNumber} · ${seat.class}`"
                     >
-                      <i v-if="selectedSeatId === seat._id" class="bi bi-check-circle-fill rb-seat-check"></i>
                       <span class="rb-seat-num">{{ seat.seatNumber }}</span>
                       <span class="rb-seat-cls">{{ seat.class }}</span>
                     </button>
                   </div>
-
-                  <transition name="rb-pop">
-                    <div v-if="selectedSeatObj" class="rb-seat-confirm">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Seat <strong>{{ selectedSeatObj.seatNumber }}</strong> · {{ seatClassLabel(selectedSeatObj.class) }} selected</span>
-                    </div>
-                  </transition>
-
                   <div v-if="rebookSeats.length > 0" class="rb-seat-legend">
                     <span class="rb-legend-item rb-legend-economy">Economy</span>
                     <span class="rb-legend-item rb-legend-business">Business</span>
@@ -852,83 +686,47 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 .bk-card-wrap:hover    { border-color: var(--border); box-shadow: 0 8px 36px var(--glass-shadow); }
 .bk-card-wrap.is-cancelled { opacity: 0.55; }
 
-/* ── Flight summary row ──────────────────────────────────────────────────
-   REDESIGN: flex instead of a 1fr/auto/1fr/auto grid. The old grid let
-   .bk-endpoint stretch to fill its whole track, which is what pinned the
-   departure block to the far-left edge and the arrival block to the far-
-   right edge of THEIR OWN columns — producing the dead space in the
-   middle. Flex children size to content unless told otherwise, so nothing
-   stretches unless we explicitly ask it to (.bk-flight-info does, via
-   justify-content: center). Generous padding here also keeps every
-   element off the card's border. */
+/* ── Flight summary row — 4-column desktop grid ──────────────────────── */
 .bk-flight-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
   align-items: center;
-  gap: 28px;
-  padding: 30px 36px;
-}
-
-/* Tight center block — origin, track, and destination move and size as
-   ONE unit, centered in whatever space remains once the action panel
-   takes its fixed width. This is what makes the block feel composed
-   instead of stretched across the screen. */
-.bk-flight-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 32px;
-  flex: 1 1 auto;
-  min-width: 0;
+  padding: 24px 28px;
+  gap: 0;
 }
 
 /* ── Endpoints ───────────────────────────────────────────────────────── */
-.bk-endpoint {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  flex: 0 0 auto;     /* size to content, never stretch */
-  min-width: 84px;
-}
-.bk-endpoint--right { align-items: flex-end; text-align: right; }
+.bk-endpoint       { display: flex; flex-direction: column; gap: 4px; }
+.bk-endpoint--right { text-align: right; }
 
-/* Graceful type scale: each tier steps down by a comfortable ratio
-   instead of jumping straight from a big time to a barely-visible date.
-   The airport label is now a real middle tier (was 0.65rem, easy to miss
-   under a 1.7rem time) rather than an afterthought. */
+/* FIX #1: explicit color tokens so neither dark nor light theme loses contrast */
 .bk-time {
   font-family: var(--font-serif);
-  font-size: 1.5rem;
+  font-size: 1.7rem;
   font-weight: 700;
   line-height: 1;
   color: var(--text);
 }
 .bk-airport {
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.bk-date {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--muted);
-  opacity: 0.75;
-}
+.bk-date { font-size: 0.68rem; color: var(--muted); }
 
 /* ── Flight track ────────────────────────────────────────────────────── */
 .bk-track {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 126px;       /* fixed, not min-width — keeps the medallion centered
-                          between endpoints at any card width */
-  flex: 0 0 auto;
+  gap: 5px;
+  min-width: 120px;
+  padding: 0 20px;
 }
 .bk-duration {
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -940,7 +738,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   height: 1px;
   background: linear-gradient(to right, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
   position: relative;
-  margin: 4px 0;
+  margin: 3px 0;
 }
 .bk-plane-medallion {
   position: absolute;
@@ -955,12 +753,12 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   font-size: 0.65rem;
 }
 .bk-airline-name {
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: 120px;
   text-align: center;
 }
 
@@ -969,16 +767,14 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
-  width: 188px;        /* fixed width — every card's button stack lines up
-                           identically regardless of badge/price text length */
-  flex: 0 0 auto;
-  padding-left: 28px;
+  gap: 5px;
+  padding-left: 24px;
   border-left: 1px solid var(--border-dim);
+  min-width: 160px;
 }
 .bk-price {
   font-family: var(--font-serif);
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--gold);
   line-height: 1;
@@ -994,9 +790,9 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 .bk-btn-stack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .bk-btn {
@@ -1005,10 +801,10 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   justify-content: center;
   gap: 6px;
   width: 100%;
-  padding: 10px 14px;
-  border-radius: 7px;
+  padding: 7px 12px;
+  border-radius: 6px;
   font-family: var(--font-sans);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-decoration: none;
@@ -1019,12 +815,8 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 }
 .bk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.bk-btn--primary {
-  background: var(--gold);
-  color: var(--ink-on-gold);
-  border-color: var(--gold);
-  box-shadow: 0 2px 10px rgba(212, 175, 55, 0.25);
-}
+/* FIX #1: gold-fill button has max contrast in any theme (dark text on gold) */
+.bk-btn--primary { background: var(--gold); color: var(--ink-on-gold); border-color: var(--gold); }
 .bk-btn--primary:hover { background: var(--gold-light); border-color: var(--gold-light); }
 
 .bk-btn--gold { background: transparent; color: var(--gold); border-color: var(--gold); }
@@ -1037,13 +829,12 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 .bk-btn--ghost:hover { color: var(--gold); border-color: var(--gold); }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   DETAIL PANEL
+   DETAIL PANEL — FIX #1 (all label/value text uses explicit tokens)
 ═══════════════════════════════════════════════════════════════════════ */
 .bk-detail-panel {
   background: rgba(0, 0, 0, 0.22);
   border-top: 1px solid var(--border-dim);
-  padding: 24px 36px 28px;   /* horizontal padding now matches .bk-flight-row
-                                 so the columns line up visually when expanded */
+  padding: 22px 28px;
 }
 [data-theme="light"] .bk-detail-panel { background: rgba(0, 0, 0, 0.03); }
 
@@ -1055,6 +846,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 }
 .bk-detail-cell  { display: flex; flex-direction: column; gap: 5px; }
 
+/* FIX #1: was missing color, falling back to inherited dark glass tint */
 .bk-detail-label {
   font-size: 0.62rem;
   font-weight: 700;
@@ -1105,9 +897,10 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 .bk-slide-enter-from, .bk-slide-leave-to { max-height: 0; opacity: 0; }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   REBOOK MODAL
+   REBOOK MODAL — FIX #2 (full overhaul) + FIX #3 (responsive)
 ═══════════════════════════════════════════════════════════════════════ */
 
+/* FIX #3: overlay scrolls so modal never clips on small screens */
 .rb-overlay {
   position: fixed;
   inset: 0;
@@ -1198,6 +991,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 }
 .rb-summary-ep           { display: flex; flex-direction: column; gap: 4px; }
 .rb-summary-ep--right    { text-align: right; }
+/* FIX #1: IATA codes need var(--text) to show in light mode */
 .rb-summary-iata {
   font-family: var(--font-serif);
   font-size: 1.65rem; font-weight: 900;
@@ -1236,7 +1030,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   border: 1px solid var(--border);
   border-radius: 8px; padding: 12px 16px;
   font-size: 0.8rem;
-  color: var(--text);
+  color: var(--text);   /* FIX #1 */
   line-height: 1.55;
 }
 .rb-notice-icon { color: var(--gold); font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
@@ -1280,6 +1074,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 .rb-progress-step.is-done .rb-progress-num {
   background: var(--gold); color: var(--ink-on-gold);
 }
+/* FIX #1: label was inheriting glass color instead of the text token */
 .rb-progress-label {
   font-size: 0.68rem; font-weight: 600;
   color: var(--text);
@@ -1290,56 +1085,18 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 /* Scrollable modal body */
 .rb-body {
   padding: 20px 22px;
-  overflow-y: auto;
+  overflow-y: auto;   /* FIX #3: inner scroll, not modal clip */
   flex: 1;
   display: flex; flex-direction: column; gap: 20px;
-  max-height: 55vh;
+  max-height: 55vh;   /* FIX #3: defined max prevents unbounded growth on desktop */
 }
 
 .rb-field-group { display: flex; flex-direction: column; gap: 10px; }
 
-/* Field label row + step pill — the per-field "you are here" indicator
-   shown above the date, flight, and seat sections. Mirrors the same
-   gold/ink-on-gold language as .rb-progress-num above. */
-.rb-field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.rb-step-pill {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 46px; height: 20px; padding: 0 8px;
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border-radius: 20px;
-  background: var(--gold-dim); color: var(--gold);
-  border: 1px solid var(--border);
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-  flex-shrink: 0;
-}
-.rb-step-pill.is-done { background: var(--gold); color: var(--ink-on-gold); border-color: var(--gold); }
-.rb-step-pill i { font-size: 0.7rem; }
-
 /* Date row */
 .rb-date-row   { display: flex; gap: 10px; align-items: center; }
-.rb-date-input { flex: 1; min-width: 0; width: 100%; }
+.rb-date-input { flex: 1; min-width: 0; }
 .rb-find-btn   { flex-shrink: 0; white-space: nowrap; padding: 10px 18px; }
-
-/* Step-1 hover/focus tooltip anchored to the date input */
-.rb-tip-anchor { position: relative; flex: 1; min-width: 0; }
-.rb-tip {
-  position: absolute; left: 2px; bottom: calc(100% + 10px);
-  background: var(--text); color: var(--bg-60-surface);
-  border-radius: 6px; padding: 6px 11px;
-  font-size: 0.7rem; font-weight: 600; white-space: nowrap;
-  opacity: 0; pointer-events: none;
-  transform: translateY(4px);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
-  z-index: 2;
-}
-.rb-tip::after {
-  content: ''; position: absolute; top: 100%; left: 16px;
-  border: 5px solid transparent; border-top-color: var(--text);
-}
-.rb-tip-anchor:hover .rb-tip,
-.rb-tip-anchor:focus-within .rb-tip { opacity: 1; transform: translateY(0); }
 
 /* Flight list */
 .rb-flight-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1350,33 +1107,18 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   gap: 12px; padding: 13px 16px;
   border: 1px solid var(--border-dim);
   border-radius: 8px; cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
   position: relative;
 }
 .rb-flight-card:hover     { border-color: var(--border); background: var(--glass-bg-lt); }
-.rb-flight-card:hover:not(.is-selected) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18); }
 .rb-flight-card.is-selected { border-color: var(--gold); background: var(--gold-dim); }
 .rb-flight-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-
-/* "Next step" tooltip — nudges the user on hover/focus of an unselected
-   card; the selected card shows the check icon instead (.rb-fc-check). */
-.rb-fc-tooltip {
-  position: absolute; top: 0; right: 16px;
-  transform: translateY(-100%) translateY(-6px);
-  background: var(--text); color: var(--bg-60-surface);
-  font-size: 0.64rem; font-weight: 700;
-  padding: 5px 10px; border-radius: 6px;
-  white-space: nowrap; opacity: 0; pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  z-index: 2;
-}
-.rb-flight-card:hover .rb-fc-tooltip,
-.rb-flight-card:focus-visible .rb-fc-tooltip { opacity: 1; transform: translateY(-100%) translateY(-2px); }
 
 .rb-fc-left  { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .rb-fc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
 
 .rb-fc-times { display: flex; align-items: center; gap: 7px; }
+/* FIX #1 */
 .rb-fc-time  { font-weight: 700; font-size: 0.95rem; color: var(--text); }
 .rb-fc-arrow { color: var(--muted); font-size: 0.75rem; }
 
@@ -1400,51 +1142,19 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
   border: 1px solid var(--border-dim);
   border-radius: 7px;
   background: var(--glass-bg-lt);
-  color: var(--muted);
+  color: var(--muted);   /* FIX #1: explicit, not inherited */
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.15s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   padding: 3px; flex-shrink: 0;
-  position: relative;
 }
-.rb-seat:hover                   { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); transform: translateY(-2px); }
-.rb-seat.is-selected             { border-color: var(--gold); background: var(--gold); color: var(--ink-on-gold); animation: rb-seat-pop 0.3s ease; }
+.rb-seat:hover                   { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.rb-seat.is-selected             { border-color: var(--gold); background: var(--gold); color: var(--ink-on-gold); }
 .rb-seat.is-business             { border-color: rgba(212, 175, 55, 0.35); }
 .rb-seat.is-first                { border-color: rgba(111, 66, 193, 0.35); }
 .rb-seat.is-first.is-selected   { background: #7c4dcc; border-color: #7c4dcc; color: #fff; }
 
-.rb-seat-num   { font-size: 0.82rem; font-weight: 700; line-height: 1; }
-.rb-seat-cls   { font-size: 0.56rem; text-transform: capitalize; opacity: 0.7; margin-top: 2px; }
-.rb-seat-check {
-  position: absolute; top: -7px; right: -7px;
-  font-size: 0.85rem; color: var(--gold);
-  background: var(--bg-60-surface); border-radius: 50%;
-  line-height: 1;
-}
-
-@keyframes rb-seat-pop {
-  0%   { transform: scale(0.8); }
-  55%  { transform: scale(1.12); }
-  100% { transform: scale(1); }
-}
-
-/* Hover tooltip built from data-tooltip, so we don't need a v-for'd
-   <span> per seat in the template. */
-.rb-seat[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute; bottom: calc(100% + 9px); left: 50%;
-  transform: translateX(-50%);
-  background: var(--text); color: var(--bg-60-surface);
-  font-size: 0.64rem; font-weight: 700;
-  padding: 4px 9px; border-radius: 5px;
-  white-space: nowrap; z-index: 3;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-.rb-seat[data-tooltip]:hover::before {
-  content: ''; position: absolute; bottom: calc(100% + 4px); left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent; border-top-color: var(--text);
-  z-index: 3;
-}
+.rb-seat-num { font-size: 0.82rem; font-weight: 700; line-height: 1; }
+.rb-seat-cls { font-size: 0.56rem; text-transform: capitalize; opacity: 0.7; margin-top: 2px; }
 
 /* Seat legend */
 .rb-seat-legend { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 10px; }
@@ -1460,26 +1170,6 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 .rb-legend-economy::before  { border-color: var(--border-dim); background: var(--glass-bg-lt); }
 .rb-legend-business::before { border-color: rgba(212, 175, 55, 0.5); background: var(--gold-dim); }
 .rb-legend-first::before    { border-color: rgba(111, 66, 193, 0.5); background: rgba(111, 66, 193, 0.12); }
-
-/* Seat-confirmation badge — pops in the moment a seat is chosen, giving
-   immediate feedback before the user moves on to "Confirm Rebook". */
-.rb-seat-confirm {
-  display: flex; align-items: center; gap: 9px;
-  margin-top: 2px;
-  background: var(--gold-dim); border: 1px solid var(--gold);
-  border-radius: 8px; padding: 10px 14px;
-  font-size: 0.78rem; font-weight: 600; color: var(--text);
-}
-.rb-seat-confirm i { color: var(--gold); font-size: 1rem; flex-shrink: 0; }
-
-.rb-pop-enter-active { animation: rb-pop-in 0.28s ease; }
-.rb-pop-leave-active { transition: opacity 0.15s ease; }
-.rb-pop-leave-to      { opacity: 0; }
-@keyframes rb-pop-in {
-  0%   { opacity: 0; transform: scale(0.9) translateY(4px); }
-  60%  { opacity: 1; transform: scale(1.03) translateY(0); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
-}
 
 /* Loading / empty seat states */
 .rb-seats-loading {
@@ -1538,7 +1228,7 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 [data-theme="light"] .rb-flight-card:hover { background: rgba(255, 255, 255, 0.55); }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   RESPONSIVE LAYOUT
+   FIX #3 — RESPONSIVE LAYOUT
    Three breakpoints handle the transition from desktop → tablet → phone
    without any overlap or clipping.
 ═══════════════════════════════════════════════════════════════════════ */
@@ -1547,34 +1237,33 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 @media (max-width: 768px) {
   .bk-page-wrap { padding-top: 60px; padding-bottom: 60px; }
 
-  /* Flight row stacks: centered flight-info on top, action panel below
-     spanning full width. */
+  /* Flight row: 3-col (origin | track | dest), action panel drops below full-width */
   .bk-flight-row {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 24px 22px;
-    gap: 20px;
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-rows: auto auto;
+    padding: 20px 18px;
+    gap: 0 0;
   }
-  .bk-flight-info { gap: 24px; }
-
   .bk-action-panel {
+    grid-column: 1 / -1;    /* span all three columns */
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    width: 100%;
     border-left: none;
     border-top: 1px solid var(--border-dim);
-    padding: 16px 0 0 0;
-    gap: 10px;
+    padding: 14px 0 0 0;
+    min-width: unset;
+    gap: 8px;
+    margin-top: 16px;
   }
-  .bk-price { font-size: 1.15rem; }
+  .bk-price { font-size: 1.1rem; }
 
   /* Horizontal button stack */
   .bk-btn-stack {
     flex-direction: row;
     flex-wrap: wrap;
     width: auto;
-    flex: 1 1 auto;
+    flex: 1;
     justify-content: flex-end;
     margin-top: 0;
   }
@@ -1592,32 +1281,25 @@ onMounted(() => { if (isLoggedIn.value) loadBookings() })
 
 /* ── 520 px — phone ──────────────────────────────────────────────────── */
 @media (max-width: 520px) {
+  /* Fully single-column card */
   .bk-flight-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-    padding: 20px 18px;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 18px 16px;
   }
-
-  /* Origin / track / destination stack vertically, each as a full-width
-     row, instead of the desktop's tight horizontal cluster. */
-  .bk-flight-info {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .bk-endpoint         { flex-direction: row; align-items: baseline; gap: 10px; min-width: 0; }
+  .bk-endpoint         { flex-direction: row; align-items: baseline; gap: 10px; }
   .bk-endpoint--right  { justify-content: flex-end; text-align: right; }
   .bk-time             { font-size: 1.3rem; }
 
-  .bk-track { flex-direction: row; align-items: center; width: 100%; gap: 10px; }
-  .bk-track-line { flex: 1; margin: 0; }
+  /* Track goes horizontal on phone */
+  .bk-track { flex-direction: row; align-items: center; min-width: unset; padding: 0; }
+  .bk-track-line { flex: 1; }
 
+  /* Action panel: stack everything */
   .bk-action-panel {
     flex-direction: column;
     align-items: stretch;
     text-align: left;
-    padding-left: 0;
     margin-top: 0;
   }
   .bk-btn-stack { flex-direction: column; width: 100%; }
