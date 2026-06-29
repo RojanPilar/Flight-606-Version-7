@@ -3,7 +3,6 @@ const dotenv = require("dotenv");
 dotenv.config();
 const express = require("express");
 const mongoose = require("mongoose");
-const cors = require('cors'); // Moved up next to core express imports
 
 // ROUTE IMPORTS
 const userRoutes = require("./routes/user");
@@ -18,26 +17,18 @@ const paymentRoutes = require("./routes/payment");
 const itineraryRoutes = require("./routes/itinerary");
 const notificationRoutes = require("./routes/notification");
 const seatRoutes = require("./routes/seat");
-
-// CORS OPTION WRAPPER SETUPS
+const cors = require('cors');
 const corsOptions = {
-    // REMOVED THE TRAILING SLASH "/" AT THE END OF THE VERCEL DOMAIN TEXT STRING!
-    origin: [
-        "http://localhost:5173", 
-        "http://localhost:8000", 
-        "https://flight-606-version-7.vercel.app"
-    ],
+    origin: ["http://localhost:5173", "http://localhost:8000", "https://flight-606-booking-system.vercel.app"],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 200
 };
 
 // APP INITIALIZATION 
 const app = express();
-app.use(cors(corsOptions)); // Intercepts requests immediately right at the top gateway entry point
+app.use(cors(corsOptions));
 
-// DATABASE CONNECTION
+//DATABASE CONNECTION
 mongoose.connect(process.env.MONGODB_STRING);
 let db = mongoose.connection;
 db.on("error", (err) => console.error("Connection error:", err));
@@ -61,9 +52,11 @@ app.use("/itineraries", itineraryRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/seats", seatRoutes);
 
+
+
 // SERVER START
 if(require.main === module) {
-    app.listen(process.env.PORT, () => console.log(`Server running at port ${process.env.PORT}`));
+	app.listen(process.env.PORT, () => console.log(`Server running at port ${process.env.PORT}`));
 }
 
 module.exports = {app, mongoose};

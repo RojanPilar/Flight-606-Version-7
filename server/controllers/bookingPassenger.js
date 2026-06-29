@@ -45,101 +45,13 @@ module.exports.createBookingPassenger = (req, res) => {
                             if (!seat.isActive) {
                                 return res.status(400).send({ message: "Seat is not available" });
                             }
+
+                            // Verify the seat belongs to the same flight as the booking.
+                            // Prevents a passenger from claiming a seat on a different flight.
                             if (String(seat.flightId) !== String(booking.flightId)) {
                                 return res.status(400).send({ message: "Seat does not belong to this booking's flight" });
                             }
-                            if (seat.isOccupied) {
-                                return res.status(409).send({ message: "Seat is already occupied" });
-                            }
 
-                            const ticketNumber = "TKT-" + Date.now();
-
-                            return BookingPassenger.findOne({ ticketNumber })
-                                .then(existingTicketNumber => {
-                                    if (existingTicketNumber) {
-                                        return res.status(409).send({ message: "Ticket number already exists" });
-                                    }
-
-                                    const newBookingPassenger = new BookingPassenger({
-                                        bookingId,
-                                        passengerId,
-                                        seatId,
-                                        ticketNumber,
-                                        isActive: true
-                                    });
-
-                                    return newBookingPassenger.save()
-                                        .then(result => {
-                                            return Seat.findByIdAndUpdate(
-                                                seatId,
-                                                { isOccupied: true },
-                                                { new: true }
-                                            )
-                                            .then(() => {
-                                                return res.status(201).send({
-                                                    message: "Booking passenger created successfully",
-                                                    result
-                                                });
-                                            });
-                                        });
-                                });
-                        });
-                });
-        })
-        .catch(err => errorHandler(err, req, res));
-};
-
-// Mirrors createBookingPassenger above, for unauthenticated guest checkout.
-// This method was missing entirely — ConfirmPaymentPage.vue calls it for
-// every guest booking, and previously there was no route OR controller
-// function to receive it, so guest seat-saving silently 404'd every time.
-module.exports.createBookingPassengerGuest = (req, res) => {
-    const { bookingId, passengerId, seatId, guestEmail } = req.body;
-
-    if (!guestEmail || !guestEmail.includes("@")) {
-        return res.status(400).send({ message: "Valid guest email is required" });
-    }
-    if (!bookingId || !passengerId) {
-        return res.status(400).send({ message: "Booking ID and Passenger ID are required" });
-    }
-    if (!seatId) {
-        return res.status(400).send({ message: "Seat ID is required" });
-    }
-
-    return Booking.findById(bookingId)
-        .then(booking => {
-            if (!booking) {
-                return res.status(404).send({ message: "Booking not found" });
-            }
-            if (!booking.isActive) {
-                return res.status(400).send({ message: "Cannot add passenger to an inactive booking" });
-            }
-            // Guest bookings have userId: null — confirm this booking actually
-            // belongs to the guest email provided, not to a logged-in account.
-            if (booking.userId || booking.guestEmail !== guestEmail.toLowerCase()) {
-                return res.status(403).send({ message: "Unauthorized to add passengers to this booking" });
-            }
-
-            return Passenger.findById(passengerId)
-                .then(passenger => {
-                    if (!passenger) {
-                        return res.status(404).send({ message: "Passenger not found" });
-                    }
-                    if (!passenger.isActive) {
-                        return res.status(400).send({ message: "Cannot add an inactive passenger to a booking" });
-                    }
-
-                    return Seat.findById(seatId)
-                        .then(seat => {
-                            if (!seat) {
-                                return res.status(404).send({ message: "Seat not found" });
-                            }
-                            if (!seat.isActive) {
-                                return res.status(400).send({ message: "Seat is not available" });
-                            }
-                            if (String(seat.flightId) !== String(booking.flightId)) {
-                                return res.status(400).send({ message: "Seat does not belong to this booking's flight" });
-                            }
                             if (seat.isOccupied) {
                                 return res.status(409).send({ message: "Seat is already occupied" });
                             }
