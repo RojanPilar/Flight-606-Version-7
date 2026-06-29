@@ -131,7 +131,7 @@
 
 .admin-table tbody tr:last-child td { border-bottom: none; }
 
-..admin-table tbody tr:hover td { background: var(--gold-dim); }
+.admin-table tbody tr:hover td { background: var(--gold-dim); }
 
 .admin-pagination {
   display: flex;
