@@ -38,6 +38,16 @@
 
      PROBLEM 8 — seat map container used `bg-light rounded border` — forces
        Bootstrap's hard #f8f9fa. Replaced with bf-seatmap-bg.
+
+     PROBLEM 9 — onMounted() wrapped every leg's [getFlightById, getSeatsByFlight]
+       calls in ONE outer Promise.all(). A single 404 on any leg (e.g. flight.js
+       and seat.js disagreeing on isActive, or a flight with zero seats
+       generated) silently failed the ENTIRE page with a generic "Failed to
+       load flight details" message — no leg number, no status code, no API
+       message.
+       FIX: each leg now loads via Promise.allSettled so a failure on one leg
+       doesn't swallow the others, and the real HTTP status + backend message
+       are surfaced in errorMessage / the console.
      ─────────────────────────────────────────────────────────────────────────
 -->
 <script setup>
@@ -118,49 +128,68 @@ onMounted(async () => {
 
     try {
         const flightsCollector = [];
-        const flightSeatLoads = flightIds.map(id =>
-            Promise.all([getFlightById(id), getSeatsByFlight(id)])
+        const legErrors = [];
+
+        // Load each leg independently. A 404/error on ONE leg no longer
+        // takes down every other leg — and we capture exactly which leg
+        // failed, with which HTTP status and backend message.
+        const legSettled = await Promise.allSettled(
+            flightIds.map(id => Promise.all([getFlightById(id), getSeatsByFlight(id)]))
         );
 
-        const [flightSeatResults, profilesResult] = await Promise.allSettled([
-            Promise.all(flightSeatLoads),
-            getMyPassengers()
-        ]);
+        // Passenger autofill is non-critical — never let it block flight loading.
+        const profilesResult = await getMyPassengers().catch(() => null);
 
-        if (flightSeatResults.status === 'fulfilled') {
-            for (let i = 0; i < flightIds.length; i++) {
-                const [flightRes, seatsRes] = flightSeatResults.value[i];
-                flightsCollector.push(flightRes.result || flightRes.data || flightRes);
-                seatsMap.value[flightIds[i]] = seatsRes.seats || seatsRes.result || [];
-                selectedSeats.value[flightIds[i]] = [];
-            }
-            flightsMap.value = flightsCollector;
-            bookingStore.startFunnel({ flights: flightsCollector, isGuest: isGuestRoute.value });
+        legSettled.forEach((settled, i) => {
+            const flightId = flightIds[i];
 
-            for (let i = 0; i < flightIds.length; i++) {
-                if (bookingStore.legs[i]) {
-                    bookingStore.legs[i].seats = seatsMap.value[flightIds[i]] || [];
-                }
+            if (settled.status === 'rejected') {
+                const status = settled.reason?.response?.status;
+                const apiMsg = settled.reason?.response?.data?.message;
+                console.error(`Leg ${i + 1} (${flightId}) failed to load:`, settled.reason);
+                legErrors.push(
+                    `Leg ${i + 1}: ${apiMsg || 'request failed'}${status ? ` (HTTP ${status})` : ''}`
+                );
+                return;
             }
 
-            // Fetch all unique airports used across all flights.
-            // String() ensures ObjectId objects don't create duplicate cache keys.
-            const airportIds = new Set();
-            for (const f of flightsCollector) {
-                if (f.originAirportId)      airportIds.add(String(f.originAirportId));
-                if (f.destinationAirportId) airportIds.add(String(f.destinationAirportId));
-            }
-            await Promise.allSettled([...airportIds].map(fetchAirport));
+            const [flightRes, seatsRes] = settled.value;
+            const flight = flightRes.result || flightRes.data || flightRes;
+            flightsCollector.push(flight);
+            seatsMap.value[flightId] = seatsRes.seats || seatsRes.result || [];
+            selectedSeats.value[flightId] = [];
+        });
 
-        } else {
-            errorMessage.value = 'Failed to load flight details. Please try again.';
+        if (legErrors.length > 0) {
+            errorMessage.value = `Failed to load flight details — ${legErrors.join(' | ')}`;
+            isLoading.value = false;
+            return;
         }
 
-        if (profilesResult.status === 'fulfilled') {
-            savedPassengers.value = profilesResult.value.passengers || profilesResult.value.result || [];
+        flightsMap.value = flightsCollector;
+        bookingStore.startFunnel({ flights: flightsCollector, isGuest: isGuestRoute.value });
+
+        for (let i = 0; i < flightIds.length; i++) {
+            if (bookingStore.legs[i]) {
+                bookingStore.legs[i].seats = seatsMap.value[flightIds[i]] || [];
+            }
+        }
+
+        // Fetch all unique airports used across all flights.
+        // String() ensures ObjectId objects don't create duplicate cache keys.
+        const airportIds = new Set();
+        for (const f of flightsCollector) {
+            if (f.originAirportId)      airportIds.add(String(f.originAirportId));
+            if (f.destinationAirportId) airportIds.add(String(f.destinationAirportId));
+        }
+        await Promise.allSettled([...airportIds].map(fetchAirport));
+
+        if (profilesResult) {
+            savedPassengers.value = profilesResult.passengers || profilesResult.result || [];
         }
 
     } catch (err) {
+        console.error('Unexpected error while loading booking page:', err);
         errorMessage.value = 'We could not load this flight. Please search again.';
     } finally {
         isLoading.value = false;

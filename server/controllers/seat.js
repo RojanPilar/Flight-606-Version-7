@@ -6,7 +6,15 @@ const { errorHandler } = require("../auth");
 // USER LEVEL ACCESS
 
 module.exports.getSeatsByFlight = (req, res) => {
-	return Flight.findOne({ _id: req.params.flightId, isActive: true })
+	// NOTE: We intentionally do NOT filter by `isActive: true` on the Flight
+	// lookup here. getFlightById() (flight.js) doesn't filter on isActive
+	// either, and BookFlightPage.vue calls both endpoints in parallel via
+	// Promise.all for every leg. If they disagree on what counts as a
+	// "valid" flight, one call succeeds, the other 404s, and the whole
+	// page dies with a generic "Failed to load flight details" message.
+	// Actual booking creation (booking.js) still enforces isActive before
+	// a seat can ever be claimed, so this stays safe.
+	return Flight.findById(req.params.flightId)
 		.then(flight => {
 			if (!flight) {
 				return res.status(404).send({ message: "Flight not found" });
@@ -18,18 +26,16 @@ module.exports.getSeatsByFlight = (req, res) => {
 			})
 			.sort({ seatNumber: 1 })
 			.then(result => {
-				if (result.length === 0) {
-					return res.status(404).send({ message: "No seats found for this flight" });
-				}
-
-				// Summary counts — useful for the frontend to display
-				// "X of Y seats available" without counting client-side.
+				// An empty seat map is valid data (seats not yet generated
+				// for this flight), not an error condition — return 200
+				// with an empty array instead of 404 so the frontend can
+				// render that state instead of crashing the whole load.
 				const total    = result.length;
 				const occupied = result.filter(s => s.isOccupied).length;
 				const available = total - occupied;
 
 				return res.status(200).send({
-					message: "Seats found",
+					message: total > 0 ? "Seats found" : "No seats configured for this flight yet",
 					summary: { total, occupied, available },
 					seats: result
 				});
