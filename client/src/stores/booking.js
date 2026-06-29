@@ -188,5 +188,6 @@ export const useBookingStore = defineStore('booking', () => {
         setLastOrder,
         clearFunnel,
         clearLastOrder
+        enrichBooking
     };
 });
