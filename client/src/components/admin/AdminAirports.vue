@@ -1,11 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getAllAirports, createAirport, deactivateAirport, reactivateAirport } from '../../api.js';
-import AdminPagination from './AdminPagination.vue';
 import { usePagination } from './pagination.js';
+import AdminPagination from './AdminPagination.vue';
 
 const airports = ref([]);
-const { currentPage, totalPages, pagedItems, pageNumbers, goToPage } = usePagination(airports);
 const errorMessage = ref('');
 const successMessage = ref('');
 const isLoading = ref(false);
@@ -13,6 +12,16 @@ const isSubmitting = ref(false);
 const showCreateForm = ref(false);
 
 const form = ref({ name: '', iataCode: '', city: '', country: '' });
+
+// Pagination — no existing search/filter here, so we paginate
+// directly over the raw `airports` list.
+const {
+    pagedItems: paginatedAirports,
+    currentPage,
+    totalPages,
+    pageNumbers,
+    goToPage,
+} = usePagination(airports, 10);
 
 async function loadAirports() {
     try {
@@ -107,47 +116,50 @@ onMounted(loadAirports);
                 <i class="ti ti-loader-2 admin-spinner"></i> Loading…
             </div>
 
-            <div v-else class="admin-table-wrap">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>IATA</th>
-                            <th>City</th>
-                            <th>Country</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-if="airports.length === 0">
-                            <td colspan="6" class="admin-empty-row">No airports found.</td>
-                        </tr>
-                        <tr v-for="airport in pagedItems" :key="airport._id">
-                            <td>{{ airport.name }}</td>
-                            <td><span class="admin-badge badge-muted">{{ airport.iataCode }}</span></td>
-                            <td>{{ airport.city }}</td>
-                            <td>{{ airport.country }}</td>
-                            <td>
-                                <span class="admin-badge" :class="airport.isActive ? 'badge-active' : 'badge-inactive'">
-                                    {{ airport.isActive ? 'Active' : 'Inactive' }}
-                                </span>
-                            </td>
-                            <td class="admin-actions-cell">
-                                <button class="btn-table-action" :class="airport.isActive ? 'btn-table-danger' : 'btn-table-success'" @click="toggleStatus(airport)">
-                                    {{ airport.isActive ? 'Deactivate' : 'Reactivate' }}
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <template v-else>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>IATA</th>
+                                <th>City</th>
+                                <th>Country</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="airports.length === 0">
+                                <td colspan="6" class="admin-empty-row">No airports found.</td>
+                            </tr>
+                            <tr v-for="airport in paginatedAirports" :key="airport._id">
+                                <td>{{ airport.name }}</td>
+                                <td><span class="admin-badge badge-muted">{{ airport.iataCode }}</span></td>
+                                <td>{{ airport.city }}</td>
+                                <td>{{ airport.country }}</td>
+                                <td>
+                                    <span class="admin-badge" :class="airport.isActive ? 'badge-active' : 'badge-inactive'">
+                                        {{ airport.isActive ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="admin-actions-cell">
+                                    <button class="btn-table-action" :class="airport.isActive ? 'btn-table-danger' : 'btn-table-success'" @click="toggleStatus(airport)">
+                                        {{ airport.isActive ? 'Deactivate' : 'Reactivate' }}
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
                 <AdminPagination
                     :current-page="currentPage"
                     :total-pages="totalPages"
                     :page-numbers="pageNumbers"
                     @go-to-page="goToPage"
                 />
-            </div>
+            </template>
 
         </div>
     </div>

@@ -1,11 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getAllAircraft, getAllAirlines, createAircraft, updateAircraft, deactivateAircraft, reactivateAircraft } from '../../api.js';
-import AdminPagination from './AdminPagination.vue';
 import { usePagination } from './pagination.js';
+import AdminPagination from './AdminPagination.vue';
 
 const aircraft = ref([]);
-const { currentPage, totalPages, pagedItems, pageNumbers, goToPage } = usePagination(aircraft);
 const airlines = ref([]);
 const errorMessage = ref('');
 const successMessage = ref('');
@@ -16,6 +15,16 @@ const showCreateForm = ref(false);
 const form = ref({ airlineId: '', model: '', totalSeats: '' });
 const editForm = ref({ id: null, airlineId: '', model: '', totalSeats: '' });
 const showEditModal = ref(false);
+
+// Pagination — no existing search/filter on this view, so we paginate
+// directly over the raw `aircraft` list.
+const {
+    pagedItems: paginatedAircraft,
+    currentPage,
+    totalPages,
+    pageNumbers,
+    goToPage,
+} = usePagination(aircraft, 10);
 
 async function loadData() {
     try {
@@ -146,48 +155,51 @@ onMounted(loadData);
                 <i class="ti ti-loader-2 admin-spinner"></i> Loading…
             </div>
 
-            <div v-else class="admin-table-wrap">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Airline</th>
-                            <th>Model</th>
-                            <th>Total Seats</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-if="aircraft.length === 0">
-                            <td colspan="5" class="admin-empty-row">No aircraft found.</td>
-                        </tr>
-                        <tr v-for="ac in pagedItems" :key="ac._id">
-                            <td>{{ getAirlineName(ac.airlineId) }}</td>
-                            <td>{{ ac.model }}</td>
-                            <td>{{ ac.totalSeats }}</td>
-                            <td>
-                                <span class="admin-badge" :class="ac.isActive ? 'badge-active' : 'badge-inactive'">
-                                    {{ ac.isActive ? 'Active' : 'Inactive' }}
-                                </span>
-                            </td>
-                            <td class="admin-actions-cell">
-                                <button class="btn-table-action" @click="openEditModal(ac)">
-                                    <i class="ti ti-pencil"></i> Edit
-                                </button>
-                                <button class="btn-table-action" :class="ac.isActive ? 'btn-table-danger' : 'btn-table-success'" @click="toggleStatus(ac)">
-                                    {{ ac.isActive ? 'Deactivate' : 'Reactivate' }}
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <template v-else>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Airline</th>
+                                <th>Model</th>
+                                <th>Total Seats</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="aircraft.length === 0">
+                                <td colspan="5" class="admin-empty-row">No aircraft found.</td>
+                            </tr>
+                            <tr v-for="ac in paginatedAircraft" :key="ac._id">
+                                <td>{{ getAirlineName(ac.airlineId) }}</td>
+                                <td>{{ ac.model }}</td>
+                                <td>{{ ac.totalSeats }}</td>
+                                <td>
+                                    <span class="admin-badge" :class="ac.isActive ? 'badge-active' : 'badge-inactive'">
+                                        {{ ac.isActive ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="admin-actions-cell">
+                                    <button class="btn-table-action" @click="openEditModal(ac)">
+                                        <i class="ti ti-pencil"></i> Edit
+                                    </button>
+                                    <button class="btn-table-action" :class="ac.isActive ? 'btn-table-danger' : 'btn-table-success'" @click="toggleStatus(ac)">
+                                        {{ ac.isActive ? 'Deactivate' : 'Reactivate' }}
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
                 <AdminPagination
                     :current-page="currentPage"
                     :total-pages="totalPages"
                     :page-numbers="pageNumbers"
                     @go-to-page="goToPage"
                 />
-            </div>
+            </template>
         </div>
 
         <!-- Edit Modal -->

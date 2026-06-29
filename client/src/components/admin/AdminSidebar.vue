@@ -1,10 +1,7 @@
 <script setup>
-import { ref, inject } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGlobalStore } from '../../stores/global';
-
-const theme = inject('theme');
-const toggleTheme = inject('toggleTheme');
 
 const router = useRouter();
 const globalStore = useGlobalStore();
@@ -20,10 +17,8 @@ function navigate() { closeDrawer(); }
 
 function logout() {
     localStorage.removeItem('token');
-    localStorage.removeItem('isAdmin');
     globalStore.user.token = null;
     globalStore.user.email = null;
-    globalStore.user.isAdmin = null;
     closeDrawer();
     router.push('/login');
 }
@@ -53,7 +48,9 @@ function logout() {
     </button>
   </div>
 
-  <!-- OVERLAY (mobile only — dims content behind the drawer) -->
+  <!--
+    OVERLAY  (mobile only — dims the content behind the drawer)
+  -->
   <Transition name="overlay-fade">
     <div
       v-if="drawerOpen"
@@ -65,7 +62,7 @@ function logout() {
 
   <!--
     SIDEBAR / DRAWER
-    Desktop: fixed-width column, always visible.
+    Desktop: always visible vertical column.
     Mobile:  off-canvas drawer, slides in from the left.
   -->
   <nav
@@ -81,22 +78,8 @@ function logout() {
       <i class="ti ti-x"></i>
     </button>
 
+    <!-- Operations -->
     <p class="sidebar-section-label">Operations</p>
-
-    <!-- Theme toggle -->
-    <div class="nav-actions d-flex align-items-center">
-      <button
-        class="theme-toggle"
-        @click="toggleTheme"
-        aria-label="Toggle light/dark mode"
-        title="Toggle light/dark mode"
-      >
-        <i class="ti ti-moon icon-dark"></i>
-        <i class="ti ti-sun icon-light"></i>
-      </button>
-      <p class="sidebar-theme-toggle">Theme Toggle</p>
-    </div>
-
     <div class="profile-nav">
       <RouterLink class="nav-link" :to="{ name: 'AdminFlights' }" @click="navigate">
         <i class="ti ti-plane"></i>
@@ -122,6 +105,7 @@ function logout() {
 
     <div class="pn-sep"></div>
 
+    <!-- Configuration -->
     <p class="sidebar-section-label">Configuration</p>
     <div class="profile-nav">
       <RouterLink class="nav-link" :to="{ name: 'AdminAirlines' }" @click="navigate">
@@ -148,6 +132,7 @@ function logout() {
 
     <div class="pn-sep"></div>
 
+    <!-- Account -->
     <div class="profile-nav">
       <button class="nav-link logout-nav" @click="logout">
         <i class="ti ti-logout"></i>
@@ -163,12 +148,26 @@ function logout() {
 @import './admin-shared.css';
 
 /* ═══════════════════════════════════════════════════
-   BASE — shared between desktop & mobile.
-   Token-driven so light/dark just works via the
-   --sidebar-link / --sidebar-link-hover tokens
-   already defined in admin-shared.css.
+   DESKTOP  (>= 992px)
+   Vertical fixed-width sidebar column.
    ═══════════════════════════════════════════════════ */
 
+/* Topbar & overlay are mobile-only */
+.admin-mobile-topbar { display: none; }
+.drawer-overlay      { display: none; }
+.drawer-close-btn    { display: none; }
+
+.admin-sidebar {
+  flex: 0 0 210px;
+  width: 210px;
+  min-width: 0;
+  border-right: 1px solid var(--border-dim);
+  padding-right: 16px;
+  padding-top: 4px;
+  box-sizing: border-box;
+}
+
+/* Section labels */
 .sidebar-section-label {
   font-family: var(--font-sans);
   font-size: 0.58rem;
@@ -180,44 +179,7 @@ function logout() {
   white-space: nowrap;
 }
 
-/* ── Theme toggle row ── */
-.nav-actions {
-  padding: 0 14px 12px;
-  gap: 10px;
-}
-
-.sidebar-theme-toggle {
-  font-family: var(--font-sans);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin: 0;
-}
-
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  color: var(--gold);
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-  flex-shrink: 0;
-}
-.theme-toggle:hover { border-color: var(--gold); background: var(--gold-dim); }
-.theme-toggle .ti { font-size: 1rem; }
-
-/* Sun/moon swap — DELETE if already defined in a global stylesheet */
-.icon-light { display: none; }
-[data-theme="light"] .icon-dark  { display: none; }
-[data-theme="light"] .icon-light { display: inline; }
-
-/* ── Nav groups ── */
+/* Nav groups */
 .profile-nav {
   display: flex;
   flex-direction: column;
@@ -225,6 +187,7 @@ function logout() {
   margin-bottom: 8px;
 }
 
+/* Nav links */
 .profile-nav .nav-link {
   display: flex;
   align-items: center;
@@ -248,7 +211,10 @@ function logout() {
   box-sizing: border-box;
 }
 
-.profile-nav .nav-link .ti { font-size: 1rem; flex-shrink: 0; }
+.profile-nav .nav-link .ti {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
 
 .nav-label {
   overflow: hidden;
@@ -270,11 +236,11 @@ function logout() {
 .profile-nav .nav-link.logout-nav       { color: var(--error); }
 .profile-nav .nav-link.logout-nav:hover { background: rgba(255, 77, 77, 0.08); color: var(--error); }
 
-/* Light theme — single token-based source of truth, no !important */
-:deep([data-theme="light"]) .profile-nav .nav-link                    { color: var(--sidebar-link, #374151); }
-:deep([data-theme="light"]) .profile-nav .nav-link:hover              { color: var(--sidebar-link-hover, #111827); }
-:deep([data-theme="light"]) .profile-nav .nav-link.router-link-active { color: #b45309; }
-:deep([data-theme="light"]) .profile-nav .nav-link.logout-nav:hover   { background: rgba(217, 56, 58, 0.08); }
+/* Light theme via semantic tokens */
+:deep([data-theme="light"]) .profile-nav .nav-link                        { color: var(--sidebar-link, #374151); }
+:deep([data-theme="light"]) .profile-nav .nav-link:hover                  { color: var(--sidebar-link-hover, #111827); }
+:deep([data-theme="light"]) .profile-nav .nav-link.router-link-active     { color: #b45309; }
+:deep([data-theme="light"]) .profile-nav .nav-link.logout-nav:hover       { background: rgba(217, 56, 58, 0.08); }
 
 .pn-sep {
   height: 1px;
@@ -284,38 +250,13 @@ function logout() {
 
 
 /* ═══════════════════════════════════════════════════
-   DESKTOP  (>= 992px)
-   Rigid fixed-width column — flex-basis AND min-width
-   locked to the same value so it can neither grow nor
-   shrink. That's what kills the gaps/overlap/clipped
-   text: the sidebar is now a totally predictable box,
-   and .admin-main (flex: 1) absorbs everything else.
-   ═══════════════════════════════════════════════════ */
-@media (min-width: 992px) {
-
-  .admin-mobile-topbar { display: none; }
-  .drawer-overlay      { display: none; }
-  .drawer-close-btn    { display: none; }
-
-  .admin-sidebar {
-    flex: 0 0 220px;
-    width: 220px;
-    min-width: 220px;
-    border-right: 1px solid var(--border-dim);
-    padding-right: 16px;
-    padding-top: 4px;
-    box-sizing: border-box;
-  }
-}
-
-
-/* ═══════════════════════════════════════════════════
    MOBILE  (< 992px)
-   Off-canvas drawer + sticky topbar — unchanged
-   from the version you liked.
+   Sidebar becomes an off-canvas drawer; a sticky
+   topbar holds the hamburger toggle.
    ═══════════════════════════════════════════════════ */
 @media (max-width: 991px) {
 
+  /* ── Sticky topbar ── */
   .admin-mobile-topbar {
     display: flex;
     align-items: center;
@@ -325,6 +266,7 @@ function logout() {
     z-index: 900;
     background: var(--bg-60-surface, #0e0e12);
     border-bottom: 1px solid var(--border-dim);
+    /* Gold shimmer on the very top edge */
     box-shadow: 0 -2px 0 0 var(--gold) inset, 0 4px 24px rgba(0,0,0,0.45);
     padding: 11px 18px;
     box-sizing: border-box;
@@ -345,6 +287,7 @@ function logout() {
   }
   .topbar-brand .ti { font-size: 1rem; }
 
+  /* ── Hamburger button ── */
   .hamburger-btn {
     display: flex;
     flex-direction: column;
@@ -361,7 +304,10 @@ function logout() {
     flex-shrink: 0;
     box-sizing: border-box;
   }
-  .hamburger-btn:hover { border-color: var(--gold); background: var(--gold-dim); }
+  .hamburger-btn:hover {
+    border-color: var(--gold);
+    background: var(--gold-dim);
+  }
 
   .ham-bar {
     display: block;
@@ -369,15 +315,19 @@ function logout() {
     width: 100%;
     background: var(--muted);
     border-radius: 2px;
-    transition: transform 0.28s cubic-bezier(.4,0,.2,1), opacity 0.2s ease, background 0.2s ease;
+    transition: transform 0.28s cubic-bezier(.4,0,.2,1),
+                opacity   0.2s ease,
+                background 0.2s ease;
     transform-origin: center;
   }
   .hamburger-btn:hover .ham-bar { background: var(--gold); }
 
+  /* Animate bars into an × when drawer is open */
   .hamburger-btn.open .ham-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
   .hamburger-btn.open .ham-bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
   .hamburger-btn.open .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
+  /* ── Dim overlay ── */
   .drawer-overlay {
     display: block;
     position: fixed;
@@ -388,31 +338,42 @@ function logout() {
     z-index: 1000;
   }
 
+  /* ── Off-canvas drawer ── */
   .admin-sidebar {
+    /* Reset desktop sizing */
     flex: unset;
     width: 270px;
     max-width: 82vw;
+    /* Positioning */
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
     z-index: 1010;
+    /* Slide animation */
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(.4,0,.2,1);
     will-change: transform;
+    /* Luxury dark surface with gold left-edge */
     background: var(--bg-60-surface, #0e0e12);
     border-right: 1px solid var(--gold);
     border-top: none;
+    /* Inner spacing */
     padding: 0 0 24px;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    /* Deep shadow lifts the drawer above content */
     box-shadow: 4px 0 48px rgba(0, 0, 0, 0.65);
     box-sizing: border-box;
   }
 
-  .admin-sidebar.drawer-open { transform: translateX(0); }
+  /* Drawer open */
+  .admin-sidebar.drawer-open {
+    transform: translateX(0);
+  }
 
+  /* ── Drawer close button ── */
   .admin-sidebar .drawer-close-btn {
     display: flex;
     align-items: center;
@@ -431,27 +392,36 @@ function logout() {
   }
   .admin-sidebar .drawer-close-btn:hover { color: var(--gold); }
 
-  .sidebar-section-label { margin: 10px 0 6px 18px; }
+  /* ── Nav inside the drawer ── */
+  .sidebar-section-label {
+    margin: 10px 0 6px 18px;
+  }
 
-  .nav-actions { padding: 0 18px 12px; }
-
-  .profile-nav { padding: 0 10px; margin-bottom: 6px; }
+  .profile-nav {
+    padding: 0 10px;
+    margin-bottom: 6px;
+  }
 
   .profile-nav .nav-link {
     padding: 12px 14px;
     font-size: 0.82rem;
     border-radius: 6px;
     gap: 12px;
+    /* Full text visible — no truncation in drawer */
     white-space: normal;
     overflow: visible;
   }
-  .profile-nav .nav-link .ti { font-size: 1.1rem; }
+
+  .profile-nav .nav-link .ti {
+    font-size: 1.1rem;
+  }
 
   .pn-sep { margin: 8px 18px; }
 }
 </style>
 
-<!-- Global: Vue Transition classes for the overlay (must stay unscoped) -->
+<!-- Global: Vue Transition classes for the overlay -->
+<!-- These must be in a non-scoped block to apply to teleported elements -->
 <style>
 .overlay-fade-enter-active,
 .overlay-fade-leave-active { transition: opacity 0.25s ease; }

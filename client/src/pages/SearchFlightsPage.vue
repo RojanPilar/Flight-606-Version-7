@@ -1,8 +1,8 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getAllAirports, searchFlights } from '../api.js' 
-import { useGlobalStore } from '../stores/global.js' 
+import { getAllAirports, searchFlights } from '../api.js' // Adjust path if your api file is located in '../api.js'
+import { useGlobalStore } from '../stores/global.js' // Adjust path if your store is located in '@/stores/global'
 import { useBookingStore } from '../stores/booking.js'
 
 const router = useRouter()
@@ -16,22 +16,22 @@ const isSearching = ref(false)
 const hasSearched = ref(false)
 const errorMessage = ref('')
 
-// Form Inputs
-const tripType = ref('oneway') 
-const fromVal  = ref('')       
-const toVal    = ref('')       
-const sfDate      = ref('')   
-const returnDate  = ref('')   
+// Form Inputs (Synchronized with tripType tokens)
+const tripType = ref('oneway') // 'oneway' or 'roundtrip'
+const fromVal  = ref('')       // Stores Origin Airport Database _id
+const toVal    = ref('')       // Stores Destination Airport Database _id
+const sfDate      = ref('')   // Outbound departure date
+const returnDate  = ref('')   // Return departure date (roundtrip only)
 const pax         = ref('2 Adults')
 
 // Flight Result Buckets & Leg Trackers
 const flightResultsPerSegment = ref([])
 const selectedFlightIds = ref([])
 
-// Authentication Provider Check
+// Authentication Status State Provider Check
 const isAuthenticated = computed(() => !!globalStore.user.token)
 
-// Dynamic Luxury Banner Labels
+// Dynamic Luxury Banner Labels Computed Properties
 const fromLabel = computed(() => {
   const origin = airports.value.find(a => a._id === fromVal.value)
   return origin ? `${origin.city} (${origin.iataCode})` : 'Select Origin'
@@ -42,19 +42,20 @@ const toLabel = computed(() => {
   return dest ? `${dest.city} (${dest.iataCode})` : 'Select Destination'
 })
 
-// Check if selections are complete
+// Check if all active flight segments have a valid selection choice configured
 const isSelectionComplete = computed(() => {
   const expectedLegs = tripType.value === 'roundtrip' ? 2 : 1
   return selectedFlightIds.value.length === expectedLegs && 
          selectedFlightIds.value.every(id => id !== null && id !== undefined)
 })
 
-// Initialize Airport Dropdowns and handle URL queries
+// Initialize Airport Dropdowns and handle Homepage URL Search Forwarder Queries
 onMounted(async () => {
   try {
     const res = await getAllAirports()
     airports.value = res.result || res
 
+    // 1. Check if user arrived via Homepage forwarder query arguments
     if (route.query.from && route.query.to && route.query.date) {
       fromVal.value = route.query.from
       toVal.value   = route.query.to
@@ -63,8 +64,10 @@ onMounted(async () => {
       if (route.query.returnDate) returnDate.value = route.query.returnDate
       if (route.query.pax)        pax.value        = route.query.pax
 
+      // Auto-trigger network search instantly
       handleSearch()
     } else if (airports.value.length > 0) {
+      // 2. Set default fallbacks if entering page from standard navigation links
       fromVal.value = airports.value[0]._id
       if (airports.value[1]) toVal.value = airports.value[1]._id
     }
@@ -103,54 +106,44 @@ async function handleSearch() {
   flightResultsPerSegment.value = []
   selectedFlightIds.value = []
 
-  // Always YYYY-MM-DD — never run it through `new Date()` here, that re-introduces
-  // the local-timezone shift that caused the bug.
-  const normalize = (d) => {
-    if (!d) return ''
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
-      const [m, day, y] = d.split('/')
-      return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`
-    }
-    return d
-  }
+  // Construct segments payload dynamically mapping to layout options
+  const segments = []
+  const adjustedDate = sfDate.value + 'T12:00:00+08:00'
 
-  const segments = [
-    { origin: fromVal.value, destination: toVal.value, date: normalize(sfDate.value) }
-  ]
+  // Always append Outbound Segment Leg
+  segments.push({ origin: fromVal.value, destination: toVal.value, date: adjustedDate })
+
+  // Append Return Segment Leg if tracking a Round-Trip route sequence
   if (tripType.value === 'roundtrip') {
-    segments.push({
-      origin: toVal.value,
-      destination: fromVal.value,
-      date: normalize(returnDate.value)
-    })
+    const adjustedReturnDate = returnDate.value + 'T12:00:00+08:00'
+    segments.push({ origin: toVal.value, destination: fromVal.value, date: adjustedReturnDate })
   }
 
   try {
-    const responses = await Promise.allSettled(
-      segments.map(seg => searchFlights(seg.origin, seg.destination, seg.date))
-    )
-
+    const searchPromises = segments.map(seg => searchFlights(seg.origin, seg.destination, seg.date))
+    const responses = await Promise.allSettled(searchPromises)
+    
     responses.forEach((res, index) => {
       if (res.status === 'fulfilled') {
-        const raw = res.value.flights || res.value.result || res.value || []
-        flightResultsPerSegment.value[index] = Array.isArray(raw) ? raw : [raw]
+        flightResultsPerSegment.value[index] = res.value.flights || []
       } else {
         flightResultsPerSegment.value[index] = []
       }
     })
-
+    
+    // Preset array tracking size slots based on configured active legs
     selectedFlightIds.value = new Array(segments.length).fill(null)
   } catch (err) {
-    console.error('Flight search failed:', err)
-    errorMessage.value = 'Something went wrong while searching for flights.'
+    console.error(err)
+    errorMessage.value = 'An error occurred while compiling available flight routes.'
   } finally {
     isSearching.value = false
   }
 }
 
-
+// Select specific flight entry for specific route leg index slot
 function selectFlight(segmentIndex, flightId) {
+  // Toggling: clicking the already-selected flight deselects it
   if (selectedFlightIds.value[segmentIndex] === flightId) {
     selectedFlightIds.value[segmentIndex] = null
   } else {
@@ -158,10 +151,15 @@ function selectFlight(segmentIndex, flightId) {
   }
 }
 
+// Single target function handling Auth Checkouts vs Guest Checkouts redirection via Vue Router
 function proceedToCheckout() {
   if (!isSelectionComplete.value) return
 
   const bundledFlightIds = selectedFlightIds.value.join(',')
+
+  // Pass passenger count to the store so BookFlightPage can initialise
+  // the right number of passenger forms. startFunnel is called by
+  // BookFlightPage itself after it fetches seats — don't call it here.
   const paxNumber = parseInt(pax.value, 10) || 1
   bookingStore.setPaxCount(paxNumber)
 
@@ -172,6 +170,7 @@ function proceedToCheckout() {
   }
 }
 
+// UI Formatting Helper Utilities
 function formatTime(dt) {
   if (!dt) return '—'
   return new Date(dt).toLocaleString('en-PH', {
@@ -205,7 +204,6 @@ function calcTravelTime(departure, arrival) {
   <div class="page active">
     <div class="inner-page">
       
-      <!-- Luxury Hero Header Banner Section -->
       <div class="inner-hero">
         <div class="container text-center">
           <p class="hero-eyebrow">Flight 606 · Luxury Redefined</p>
@@ -216,8 +214,6 @@ function calcTravelTime(departure, arrival) {
 
       <div class="mt-5">
         <div class="container">
-          
-          <!-- Navigation Breadcrumb Links Tracker -->
           <nav class="theme-breadcrumb" aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
               <li class="breadcrumb-item">
@@ -227,7 +223,6 @@ function calcTravelTime(departure, arrival) {
             </ol>
           </nav>
 
-          <!-- Core Search Widget Parameter Engine Wrapper Form -->
           <div class="sf-search-bar">
             <div class="d-flex gap-4 mb-3 flex-wrap">
               <label class="r-lbl">
@@ -283,12 +278,10 @@ function calcTravelTime(departure, arrival) {
             </div>
           </div>
 
-          <!-- Network System Error Messages Banner Alerts -->
           <div v-if="errorMessage" class="alert alert-danger my-3">{{ errorMessage }}</div>
 
           <div v-if="hasSearched && !isSearching">
             
-            <!-- SEGMENT ONE: OUTBOUND FLIGHT GRID SELECTION BLOCK -->
             <div class="results-banner gold-banner">
               ✈ Select departure flight from <strong>{{ fromLabel }}</strong> to <strong>{{ toLabel }}</strong>
             </div>
@@ -305,7 +298,6 @@ function calcTravelTime(departure, arrival) {
               No flights found for this route segment on the specified date.
             </div>
 
-            <!-- Outbound Flight Cards Generation Loop -->
             <div 
               v-for="flight in flightResultsPerSegment[0]" 
               :key="flight._id"
@@ -315,7 +307,7 @@ function calcTravelTime(departure, arrival) {
             >
               <div class="fc-endpoint">
                 <div class="fc-time">{{ formatTime(flight.departureTime) }}</div>
-                <div class="fc-airport">{{ fromLabel.split('(')[0].trim() }} · {{ flight.originAirportId?.iataCode || 'MNL' }}</div>
+                <div class="fc-airport">{{ fromLabel.split('(')[0].trim() }} · {{ flight.originAirportId?.iataCode || 'DEP' }}</div>
                 <div class="fc-date">{{ formatDateLabel(flight.departureTime) }}</div>
               </div>
               <div class="fc-mid">
@@ -325,7 +317,7 @@ function calcTravelTime(departure, arrival) {
               </div>
               <div class="fc-endpoint">
                 <div class="fc-time">{{ formatTime(flight.arrivalTime) }}</div>
-                <div class="fc-airport">{{ toLabel.split('(')[0].trim() }} · {{ flight.destinationAirportId?.iataCode || 'SIN' }}</div>
+                <div class="fc-airport">{{ toLabel.split('(')[0].trim() }} · {{ flight.destinationAirportId?.iataCode || 'ARR' }}</div>
                 <div class="fc-date">{{ formatDateLabel(flight.arrivalTime) }}</div>
               </div>
               <div class="fc-price-box">
@@ -338,6 +330,7 @@ function calcTravelTime(departure, arrival) {
               </div>
             </div>
 
+
             <div v-if="tripType === 'roundtrip'" class="mt-5">
               <div class="results-banner gold-banner-dim">
                 🔄 Select return flight from <strong>{{ toLabel }}</strong> to <strong>{{ fromLabel }}</strong>
@@ -347,7 +340,6 @@ function calcTravelTime(departure, arrival) {
                 No matching return flights found for this segment layout on the specified date.
               </div>
 
-              <!-- Return Flight Cards Generation Loop -->
               <div 
                 v-for="flight in flightResultsPerSegment[1]" 
                 :key="flight._id"
@@ -357,7 +349,7 @@ function calcTravelTime(departure, arrival) {
               >
                 <div class="fc-endpoint">
                   <div class="fc-time">{{ formatTime(flight.departureTime) }}</div>
-                  <div class="fc-airport">{{ toLabel.split('(')[0].trim() }} · {{ flight.originAirportId?.iataCode || 'SIN' }}</div>
+                  <div class="fc-airport">{{ toLabel.split('(')[0].trim() }} · {{ flight.originAirportId?.iataCode || 'ARR' }}</div>
                   <div class="fc-date">{{ formatDateLabel(flight.departureTime) }}</div>
                 </div>
                 <div class="fc-mid">
@@ -367,7 +359,7 @@ function calcTravelTime(departure, arrival) {
                 </div>
                 <div class="fc-endpoint">
                   <div class="fc-time">{{ formatTime(flight.arrivalTime) }}</div>
-                  <div class="fc-airport">{{ fromLabel.split('(')[0].trim() }} · {{ flight.destinationAirportId?.iataCode || 'MNL' }}</div>
+                  <div class="fc-airport">{{ fromLabel.split('(')[0].trim() }} · {{ flight.destinationAirportId?.iataCode || 'DEP' }}</div>
                   <div class="fc-date">{{ formatDateLabel(flight.arrivalTime) }}</div>
                 </div>
                 <div class="fc-price-box">
@@ -379,32 +371,32 @@ function calcTravelTime(departure, arrival) {
                   </button>
                 </div>
               </div>
-            </div> <!-- End of Roundtrip Check Wrapper -->
+            </div>
 
-            <!-- SELECTION PROGRESS PROGRESS FOOTER CONTROL DOCK -->
-            <div class="mt-5 mb-4">
-              <div class="d-flex justify-content-between align-items-center bg-dark p-3 rounded border border-warning">
-                <div class="selection-progress-box">
-                  <span class="text-white me-2">Selection Progress:</span>
-                  <span class="badge bg-warning text-dark px-3 py-2">
-                    {{ selectedFlightIds.filter(id => id !== null).length }} / {{ tripType === 'roundtrip' ? 2 : 1 }} flight selected
+            <div class="card shadow-lg my-5 border-0 border-top border-warning border-3 bg-dark text-white">
+              <div class="card-body d-flex justify-content-between align-items-center py-3">
+                <div>
+                  <span class="fw-bold gold-link">Selection Progress:</span>
+                  <span class="ms-2 badge bg-warning text-dark">
+                    {{ selectedFlightIds.filter(id => id !== null && id !== undefined).length }}
+                    / {{ tripType === 'roundtrip' ? 2 : 1 }} flight{{ tripType === 'roundtrip' ? 's' : '' }} selected
                   </span>
                 </div>
-                <div>
-                  <button 
-                    class="btn btn-warning px-4 py-2 text-dark fw-bold" 
-                    :disabled="!isSelectionComplete"
-                    @click="proceedToCheckout"
-                  >
-                    Confirm Booking Sequence →
-                  </button>
-                </div>
+                <button
+                  class="btn-gold-full py-2 px-5 m-0 w-auto"
+                  :disabled="!isSelectionComplete"
+                  @click="proceedToCheckout"
+                >
+                  Confirm Booking Sequence <i class="bi bi-arrow-right ms-2"></i>
+                </button>
               </div>
             </div>
 
-          </div> <!-- End of hasSearched Check Wrapper -->
+          </div>
+          <div class="view-more-wrap mb-5" v-if="hasSearched && !isSearching"><button class="view-more-btn">View more ↓</button></div>
         </div>
       </div>
+
     </div>
   </div>
 </template>

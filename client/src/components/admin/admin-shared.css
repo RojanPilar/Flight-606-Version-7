@@ -4,14 +4,84 @@
    Import this file in each admin component's <style scoped>.
    ══════════════════════════════════════════════════ */
 
-/* ── Header (ps-header override for action button layout) ── */
+/* ════════════════════════════════════════════════
+   1. ADMIN LAYOUT WRAPPER
+   ─────────────────────────────────────────────────
+   Usage in AdminDashboardPage.vue:
+     <div class="admin-layout">
+       <AdminSidebar />
+       <main class="admin-main"> <RouterView /> </main>
+     </div>
+
+   The sidebar (.admin-sidebar) owns its own width.
+   .admin-main fills the rest and never overflows.
+   ════════════════════════════════════════════════ */
+.admin-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 28px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.admin-main {
+  flex: 1 1 0%;
+  min-width: 0;        /* CRITICAL — lets text wrap instead of clip */
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Tablet/mobile: sidebar goes off-canvas; main fills 100% */
+@media (max-width: 991px) {
+  .admin-layout {
+    flex-direction: column;
+    gap: 0;
+  }
+  .admin-main {
+    width: 100%;
+    overflow: visible;
+  }
+}
+
+
+/* ════════════════════════════════════════════════
+   2. PAGE SECTION HEADER
+   ════════════════════════════════════════════════ */
 .ps-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 24px;
 }
 
-/* ── Outline Gold Button (header actions) ── */
+.ps-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.ps-header h3 .ti { color: var(--gold); font-size: 0.9rem; flex-shrink: 0; }
+
+
+/* ════════════════════════════════════════════════
+   3. BUTTONS
+   ════════════════════════════════════════════════ */
+
+/* ── Outline gold (header actions — "New Flight", "New Airline" etc.) ── */
 .btn-outline-gold {
   font-family: var(--font-sans);
   font-size: 0.68rem;
@@ -29,14 +99,134 @@
   background: transparent;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
-.btn-outline-gold:hover {
-  background: var(--gold);
-  color: var(--ink-on-gold);
-}
-.btn-outline-gold .ti { font-size: 0.9rem; }
+.btn-outline-gold:hover { background: var(--gold); color: var(--ink-on-gold); }
+.btn-outline-gold .ti  { font-size: 0.9rem; }
 
-/* ── Create/Filter Form Panel ── */
+/* ── Refresh button ── */
+.btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.btn-refresh:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.btn-refresh .ti  { font-size: 0.85rem; }
+
+/* ── Full-width primary gold button ── */
+.btn-gold-full {
+  display: block;
+  width: 100%;
+  padding: 12px 24px;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-on-gold);
+  background: var(--gold);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.btn-gold-full:hover   { opacity: 0.88; }
+.btn-gold-full:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Table action buttons ── */
+.btn-table-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  padding: 5px 12px;
+  border-radius: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  white-space: nowrap;
+}
+.btn-table-action:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.btn-table-action .ti  { font-size: 0.85rem; }
+
+.btn-table-danger {
+  background: rgba(255, 77, 77, 0.08);
+  border-color: var(--error);
+  color: var(--error);
+}
+.btn-table-danger:hover { background: rgba(255, 77, 77, 0.15); color: var(--error); border-color: var(--error); }
+
+.btn-table-success {
+  background: rgba(46, 204, 113, 0.08);
+  border-color: var(--success);
+  color: var(--success);
+}
+.btn-table-success:hover { background: rgba(46, 204, 113, 0.15); color: var(--success); border-color: var(--success); }
+
+/* Icon-only table action */
+.btn-table-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  border-radius: 3px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+}
+.btn-table-icon:hover         { border-color: var(--gold);    color: var(--gold);    background: var(--gold-dim); }
+.btn-table-icon.danger:hover  { border-color: var(--error);   color: var(--error);   background: rgba(255, 77, 77, 0.08); }
+.btn-table-icon.success:hover { border-color: var(--success); color: var(--success); background: rgba(46, 204, 113, 0.08); }
+
+/* Full-width table-action variant */
+.btn-table-action.btn-block { width: 100%; justify-content: center; padding: 10px 16px; }
+
+/* Footer modal CTA sizing */
+.admin-modal-footer .btn-gold-full { width: auto; padding: 11px 26px; margin-bottom: 0; }
+
+/* Disabled state for all interactive controls */
+.btn-refresh:disabled,
+.btn-table-action:disabled,
+.btn-table-icon:disabled,
+.btn-gold-full:disabled,
+.btn-outline-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+
+/* ════════════════════════════════════════════════
+   4. FORM CONTROLS
+   ════════════════════════════════════════════════ */
+
+/* ── Form panel (create/edit panel above a table) ── */
 .admin-form-panel {
   background: var(--gold-dim);
   border: 1px solid var(--border);
@@ -44,6 +234,8 @@
   padding: 20px 24px;
   margin-bottom: 28px;
   transition: var(--theme-transition);
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .admin-form-eyebrow {
@@ -56,7 +248,7 @@
   margin: 0 0 14px;
 }
 
-/* ── Two-Column Form Grid ── */
+/* ── Two-column grid ── */
 .admin-form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -64,43 +256,153 @@
 }
 .admin-form-grid .col-span-2 { grid-column: span 2; }
 
-/* ── Single-Column Stacked Form ── */
+/* ── Single-column stack ── */
 .admin-form-stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-@media (max-width: 640px) {
-  .admin-form-grid { grid-template-columns: 1fr; }
-  .admin-form-grid .col-span-2 { grid-column: span 1; }
+/* ── Form label ── */
+.f-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
 }
 
-/* ── Loading State ── */
-.admin-loading {
-  padding: 56px 0;
-  text-align: center;
-  color: var(--muted);
+/* ── Form input / select (shared "f-input" class) ── */
+.f-input {
+  width: 100%;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 9px 12px;
   font-family: var(--font-sans);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.f-input:focus       { border-color: var(--gold); }
+.f-input::placeholder { color: var(--muted); opacity: 0.7; }
+.f-input option      { background: var(--bg-60-mid); color: var(--text); }
+.f-input:disabled    { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Checkbox label row ── */
+.r-lbl {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .admin-form-grid              { grid-template-columns: 1fr; }
+  .admin-form-grid .col-span-2  { grid-column: span 1; }
+}
+
+
+/* ════════════════════════════════════════════════
+   5. FILTER BAR
+   ════════════════════════════════════════════════ */
+.admin-filter-bar {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  display: flex;
   gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  transition: var(--theme-transition);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.admin-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 140px;
 }
-.admin-spinner {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-  font-size: 1.2rem;
+.admin-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--gold);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+.admin-search-input {
+  width: 100%;
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 9px 14px 9px 36px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+.admin-search-input:focus       { border-color: var(--gold); }
+.admin-search-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+.admin-filter-select {
+  background: var(--glass-bg-lt);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 9px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  min-width: 120px;
+}
+.admin-filter-select:focus  { border-color: var(--gold); }
+.admin-filter-select option { background: var(--bg-60-mid); color: var(--text); }
+
+.admin-filter-count {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: auto;
 }
 
-/* ── Table Wrapper ── */
-.admin-table-wrap { overflow-x: auto; }
+@media (max-width: 640px) {
+  .admin-filter-bar    { padding: 12px 14px; gap: 8px; }
+  .admin-filter-select { min-width: 100px; font-size: 0.75rem; }
+}
+
+
+/* ════════════════════════════════════════════════
+   6. DATA TABLE
+   ════════════════════════════════════════════════ */
+.admin-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
 
 .admin-table {
   width: 100%;
@@ -130,8 +432,7 @@
 }
 
 .admin-table tbody tr:last-child td { border-bottom: none; }
-
-.admin-table tbody tr:hover td { background: var(--gold-dim); }
+.admin-table tbody tr:hover td       { background: var(--gold-dim); }
 
 .admin-empty-row {
   text-align: center;
@@ -140,7 +441,20 @@
   font-size: 0.82rem;
 }
 
-/* ── Status Badges ── */
+.admin-actions-cell {
+  white-space: nowrap;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Dim an entire row without hardcoding colours */
+.row-inactive td { opacity: 0.55; }
+
+
+/* ════════════════════════════════════════════════
+   7. STATUS BADGES
+   ════════════════════════════════════════════════ */
 .admin-badge {
   display: inline-flex;
   align-items: center;
@@ -152,82 +466,24 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.badge-active   { background: rgba(46, 204, 113, 0.14); color: var(--success); }
-.badge-inactive { background: rgba(255, 77, 77, 0.14);  color: var(--error); }
-.badge-warning  { background: rgba(212, 175, 55, 0.18); color: var(--gold); }
-.badge-muted    { background: var(--glass-bg-lt);       color: var(--muted); border: 1px solid var(--border-dim); }
-
-/* ── Table Action Buttons ── */
-.admin-actions-cell { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
-
-.btn-table-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  color: var(--muted);
-  padding: 5px 12px;
-  border-radius: 3px;
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
   white-space: nowrap;
 }
-.btn-table-action:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-dim);
-}
-.btn-table-action .ti { font-size: 0.85rem; }
 
-.btn-table-danger {
-  background: rgba(255, 77, 77, 0.08);
-  border-color: var(--error);
-  color: var(--error);
-}
-.btn-table-danger:hover {
-  background: rgba(255, 77, 77, 0.15);
-  color: var(--error);
-  border-color: var(--error);
-}
+.badge-active    { background: rgba(46, 204, 113, 0.14);  color: var(--success); }
+.badge-inactive  { background: rgba(255, 77, 77, 0.14);   color: var(--error);   }
+.badge-warning   { background: rgba(212, 175, 55, 0.18);  color: var(--gold);    }
+.badge-muted     { background: var(--glass-bg-lt); color: var(--muted); border: 1px solid var(--border-dim); }
+.badge-scheduled { background: rgba(212, 175, 55, 0.14);  color: var(--gold);    }
+.badge-delayed   { background: rgba(255, 77, 77, 0.12);   color: var(--error);   }
+.badge-on-time   { background: rgba(46, 204, 113, 0.12);  color: var(--success); }
+.badge-cancelled { background: rgba(255, 77, 77, 0.18);   color: var(--error);   }
+.badge-departed  { background: var(--glass-bg-lt); color: var(--muted); border: 1px solid var(--border-dim); }
+.badge-arrived   { background: var(--glass-bg-lt); color: var(--muted); border: 1px solid var(--border-dim); }
 
-.btn-table-success {
-  background: rgba(46, 204, 113, 0.08);
-  border-color: var(--success);
-  color: var(--success);
-}
-.btn-table-success:hover {
-  background: rgba(46, 204, 113, 0.15);
-  color: var(--success);
-  border-color: var(--success);
-}
 
-/* ── Icon-Only Table Action Buttons ── */
-.btn-table-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  color: var(--muted);
-  border-radius: 3px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-  flex-shrink: 0;
-}
-.btn-table-icon:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
-.btn-table-icon.danger:hover { border-color: var(--error); color: var(--error); background: rgba(255, 77, 77, 0.08); }
-.btn-table-icon.success:hover { border-color: var(--success); color: var(--success); background: rgba(46, 204, 113, 0.08); }
-
-/* ── Stats Row ── */
+/* ════════════════════════════════════════════════
+   8. STATS ROW
+   ════════════════════════════════════════════════ */
 .admin-stats-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -245,6 +501,7 @@
   text-align: center;
   transition: var(--theme-transition);
   box-shadow: 0 4px 16px var(--glass-shadow);
+  min-width: 0;
 }
 
 .admin-stat-number {
@@ -255,10 +512,9 @@
   line-height: 1;
   margin-bottom: 4px;
 }
-
-.admin-stat-number.stat-error   { color: var(--error); }
+.admin-stat-number.stat-error   { color: var(--error);   }
 .admin-stat-number.stat-success { color: var(--success); }
-.admin-stat-number.stat-muted   { color: var(--muted); }
+.admin-stat-number.stat-muted   { color: var(--muted);   }
 
 .admin-stat-label {
   font-family: var(--font-sans);
@@ -269,128 +525,76 @@
   color: var(--muted);
 }
 
+.admin-stats-row.cols-6 { grid-template-columns: repeat(6, 1fr); }
+
+@media (max-width: 991px) {
+  .admin-stats-row         { grid-template-columns: repeat(2, 1fr); }
+  .admin-stats-row.cols-6  { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 640px) {
-  .admin-stats-row { grid-template-columns: 1fr 1fr; }
+  .admin-stats-row         { grid-template-columns: 1fr 1fr; }
+  .admin-stats-row.cols-6  { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ── Filter/Search Bar ── */
-.admin-filter-bar {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
+
+/* ════════════════════════════════════════════════
+   9. LOADING / EMPTY STATES
+   ════════════════════════════════════════════════ */
+.admin-loading {
+  padding: 56px 0;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
   display: flex;
-  gap: 12px;
   align-items: center;
-  flex-wrap: wrap;
-  transition: var(--theme-transition);
+  justify-content: center;
+  gap: 10px;
 }
-
-.admin-search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-}
-
-.admin-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+@keyframes spin { to { transform: rotate(360deg); } }
+.admin-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 1.2rem;
   color: var(--gold);
-  font-size: 0.9rem;
-  pointer-events: none;
 }
 
-.admin-search-input {
-  width: 100%;
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  border-radius: 4px;
-  padding: 9px 14px 9px 36px;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  color: var(--text);
-  outline: none;
-  transition: border-color 0.2s ease;
-}
-.admin-search-input:focus   { border-color: var(--gold); }
-.admin-search-input::placeholder { color: var(--muted); opacity: 0.7; }
-
-.admin-filter-select {
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  border-radius: 4px;
-  padding: 9px 14px;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  color: var(--text);
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-  min-width: 160px;
-}
-.admin-filter-select:focus { border-color: var(--gold); }
-.admin-filter-select option { background: var(--bg-60-mid); color: var(--text); }
-
-.admin-filter-count {
-  font-family: var(--font-sans);
-  font-size: 0.7rem;
-  color: var(--muted);
-  white-space: nowrap;
-  margin-left: auto;
-}
-
-/* ── Refresh Button ── */
-.btn-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--glass-bg-lt);
-  border: 1px solid var(--border-dim);
-  border-radius: 3px;
-  padding: 8px 16px;
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-  flex-shrink: 0;
-}
-.btn-refresh:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-dim);
-}
-.btn-refresh .ti { font-size: 0.85rem; }
-
-/* ── Empty State ── */
 .admin-empty-state {
   text-align: center;
   padding: 64px 24px;
   color: var(--muted);
 }
-.admin-empty-state .ti {
-  font-size: 2.8rem;
-  color: var(--border);
-  display: block;
-  margin-bottom: 12px;
-}
-.admin-empty-state p {
+.admin-empty-state .ti { font-size: 2.8rem; color: var(--border); display: block; margin-bottom: 12px; }
+.admin-empty-state p   { font-family: var(--font-sans); font-size: 0.82rem; margin: 0; }
+
+
+/* ════════════════════════════════════════════════
+   10. ALERT MESSAGES
+   ════════════════════════════════════════════════ */
+.alert-msg {
   font-family: var(--font-sans);
-  font-size: 0.82rem;
-  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  border-left: 3px solid;
+}
+.alert-success {
+  background: rgba(46, 204, 113, 0.1);
+  border-color: var(--success);
+  color: var(--success);
+}
+.alert-error {
+  background: rgba(255, 77, 77, 0.1);
+  border-color: var(--error);
+  color: var(--error);
 }
 
-/* ── Modal ── */
+
+/* ════════════════════════════════════════════════
+   11. MODALS
+   ════════════════════════════════════════════════ */
 .admin-modal-overlay {
   position: fixed;
   inset: 0;
@@ -400,13 +604,12 @@
   justify-content: center;
   z-index: 1050;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   animation: fadeIn 0.18s ease;
+  padding: 16px;
+  box-sizing: border-box;
 }
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .admin-modal {
   background: var(--bg-60-surface);
@@ -418,8 +621,8 @@
   overflow-y: auto;
   box-shadow: 0 24px 64px var(--glass-shadow);
   animation: modalUp 0.2s ease;
+  box-sizing: border-box;
 }
-
 .admin-modal-lg { max-width: 720px; }
 
 @keyframes modalUp {
@@ -433,35 +636,35 @@
   justify-content: space-between;
   padding: 18px 24px;
   border-bottom: 1px solid var(--border);
+  gap: 12px;
 }
-
 .admin-modal-header h4 {
   margin: 0;
   font-family: var(--font-sans);
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
 .admin-modal-close {
   background: none;
   border: none;
   color: var(--muted);
   font-size: 1rem;
   cursor: pointer;
-  line-height: 1;
   padding: 4px;
   border-radius: 3px;
   transition: color 0.2s ease, background 0.2s ease;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 .admin-modal-close:hover { color: var(--text); background: var(--border-dim); }
 
-.admin-modal-body {
-  padding: 22px 24px;
-}
-
+.admin-modal-body   { padding: 22px 24px; }
 .admin-modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -469,54 +672,21 @@
   gap: 10px;
   padding: 16px 24px;
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
-/* ── Airline Logo ── */
-.admin-airline-logo {
-  height: 26px;
-  width: auto;
-  object-fit: contain;
-  border-radius: 2px;
+@media (max-width: 640px) {
+  .admin-modal-body   { padding: 18px; }
+  .admin-modal-footer { padding: 14px 18px; }
 }
 
-/* ── Progress Bar ── */
-.admin-progress-wrap { margin-top: 4px; }
 
-.admin-progress {
-  height: 6px;
-  background: var(--glass-bg-lt);
-  border-radius: 3px;
-  overflow: hidden;
-  border: 1px solid var(--border-dim);
-}
-
-.admin-progress-bar {
-  height: 100%;
-  background: var(--gold);
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-.admin-progress-bar.bar-danger  { background: var(--error); }
-.admin-progress-bar.bar-success { background: var(--success); }
-
-/* ── Detail Info Table ── */
-.admin-detail-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-}
-
-.admin-detail-table td {
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border-dim);
-  vertical-align: top;
-  color: var(--text);
-}
-
+/* ════════════════════════════════════════════════
+   12. DETAIL TABLE (inside modals / panels)
+   ════════════════════════════════════════════════ */
+.admin-detail-table { width: 100%; border-collapse: collapse; font-family: var(--font-sans); font-size: 0.8rem; }
+.admin-detail-table td { padding: 9px 0; border-bottom: 1px solid var(--border-dim); vertical-align: top; color: var(--text); }
 .admin-detail-table tr:last-child td { border-bottom: none; }
-
 .admin-detail-label {
   color: var(--muted);
   font-weight: 700;
@@ -525,9 +695,9 @@
   text-transform: uppercase;
   width: 140px;
   padding-right: 16px;
+  white-space: nowrap;
 }
 
-/* ── Message Box (detail modal body) ── */
 .admin-message-box {
   background: var(--gold-dim);
   border: 1px solid var(--border);
@@ -540,7 +710,50 @@
   margin-bottom: 16px;
 }
 
-/* ── Seat Map Styles ── */
+
+/* ════════════════════════════════════════════════
+   13. INLINE NOTE
+   ════════════════════════════════════════════════ */
+.admin-inline-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.admin-inline-note .ti      { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
+.admin-inline-note.note-warning { color: var(--gold);    }
+.admin-inline-note.note-error   { color: var(--error);   }
+.admin-inline-note.note-success { color: var(--success); }
+
+
+/* ════════════════════════════════════════════════
+   14. PROGRESS BAR
+   ════════════════════════════════════════════════ */
+.admin-progress-wrap { margin-top: 4px; }
+.admin-progress {
+  height: 6px;
+  background: var(--glass-bg-lt);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border-dim);
+}
+.admin-progress-bar {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.admin-progress-bar.bar-danger  { background: var(--error);   }
+.admin-progress-bar.bar-success { background: var(--success); }
+
+
+/* ════════════════════════════════════════════════
+   15. SEAT MAP
+   ════════════════════════════════════════════════ */
 .seat-btn {
   width: 46px;
   height: 32px;
@@ -557,43 +770,43 @@
 }
 .seat-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px var(--glass-shadow); }
 
-.seat-business {
-  background: var(--accent-30-gls);
-  border-color: var(--gold);
-  color: var(--gold);
-}
-.seat-economy {
-  background: rgba(46, 204, 113, 0.08);
-  border-color: var(--success);
-  color: var(--success);
-}
-.seat-occupied {
-  background: rgba(255, 77, 77, 0.10);
-  border-color: var(--error);
-  color: var(--error);
-  cursor: pointer;
-}
+.seat-business { background: var(--accent-30-gls); border-color: var(--gold);    color: var(--gold);    }
+.seat-economy  { background: rgba(46, 204, 113, 0.08); border-color: var(--success); color: var(--success); }
+.seat-occupied { background: rgba(255, 77, 77, 0.10);  border-color: var(--error);   color: var(--error);   cursor: pointer; }
 .seat-occupied:hover { background: rgba(255, 77, 77, 0.18); }
-.seat-inactive {
-  background: var(--glass-bg-lt);
-  border-color: var(--border-dim);
-  color: var(--border);
-  cursor: not-allowed;
-  opacity: 0.45;
+.seat-inactive { background: var(--glass-bg-lt); border-color: var(--border-dim); color: var(--border); cursor: not-allowed; opacity: 0.45; }
+.seat-selected { outline: 2px solid var(--gold); outline-offset: 2px; }
+.seat-btn.seat-sm { width: 38px; height: 28px; font-size: 0.55rem; }
+
+.admin-seat-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+
+
+/* ════════════════════════════════════════════════
+   16. SPLIT LAYOUT  (seat map + detail panel)
+   ════════════════════════════════════════════════ */
+.admin-split-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 28px;
+  align-items: start;
 }
-.seat-selected {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+@media (max-width: 900px) { .admin-split-layout { grid-template-columns: 1fr; } }
+
+.admin-detail-panel { border-left: 1px solid var(--border-dim); padding-left: 24px; min-width: 0; }
+@media (max-width: 900px) {
+  .admin-detail-panel { border-left: none; border-top: 1px solid var(--border-dim); padding-left: 0; padding-top: 20px; }
 }
 
-/* ── Payment Status Cards ── */
+
+/* ════════════════════════════════════════════════
+   17. PAYMENT STATUS CARDS
+   ════════════════════════════════════════════════ */
 .status-option-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   margin-top: 10px;
 }
-
 .status-option-card {
   border: 1px solid var(--border-dim);
   border-radius: 6px;
@@ -603,46 +816,26 @@
   background: var(--glass-bg-lt);
   text-align: center;
 }
-.status-option-card:hover { border-color: var(--gold); background: var(--gold-dim); }
-.status-option-card.selected { border-color: var(--gold); background: var(--gold-dim); }
-
-.status-option-card .ti { font-size: 1.4rem; display: block; margin-bottom: 4px; }
-.status-option-card .option-label {
-  font-family: var(--font-sans);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text);
-}
+.status-option-card:hover              { border-color: var(--gold); background: var(--gold-dim); }
+.status-option-card.selected           { border-color: var(--gold); background: var(--gold-dim); }
+.status-option-card .ti                { font-size: 1.4rem; display: block; margin-bottom: 4px; }
+.status-option-card .option-label      { font-family: var(--font-sans); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
 .status-option-card.selected .option-label { color: var(--gold); }
 
-/* Flight status badge map */
-.badge-scheduled { background: rgba(212, 175, 55, 0.14); color: var(--gold); }
-.badge-delayed   { background: rgba(255, 77, 77, 0.12);  color: var(--error); }
-.badge-on-time   { background: rgba(46, 204, 113, 0.12); color: var(--success); }
-.badge-cancelled { background: rgba(255, 77, 77, 0.18);  color: var(--error); }
-.badge-departed  { background: var(--glass-bg-lt);       color: var(--muted); border: 1px solid var(--border-dim); }
-.badge-arrived   { background: var(--glass-bg-lt);       color: var(--muted); border: 1px solid var(--border-dim); }
 
-/* ══════════════════════════════════════════════════
-   ADDITIONS — small reusable primitives needed to bring
-   every admin/ component into line with the rest of the
-   design system. Token-driven only, nothing hardcoded.
-   ══════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   18. AIRLINE LOGO
+   ════════════════════════════════════════════════ */
+.admin-airline-logo { height: 26px; width: auto; object-fit: contain; border-radius: 2px; flex-shrink: 0; }
 
-/* ── Section Header — icon + title, consistent across all admin pages ── */
-.ps-header h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ps-header h3 .ti { color: var(--gold); font-size: 0.85rem; }
 
-/* ── Text Micro-Utilities ── */
+/* ════════════════════════════════════════════════
+   19. TEXT MICRO-UTILITIES
+   ════════════════════════════════════════════════ */
 .muted      { color: var(--muted); }
 .capitalize { text-transform: capitalize; }
 .mono       { font-family: ui-monospace, 'SF Mono', Consolas, monospace; letter-spacing: 0.02em; }
+.ml-auto    { margin-left: auto; }
 
 .cell-sub {
   display: block;
@@ -652,169 +845,66 @@
   margin-top: 2px;
 }
 
-/* Dim an entire row (e.g. a deactivated account) without hardcoding colours */
-.row-inactive { opacity: 0.55; }
-
-/* ── Inline Note — passport expiry, admin-grant warnings, status hints ── */
-.admin-inline-note {
+/* ── Seat map misc ── */
+.flight-summary-strip {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+}
+.fs-label {
   font-family: var(--font-sans);
-  font-size: 0.7rem;
-  line-height: 1.5;
-  margin-top: 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
 }
-.admin-inline-note .ti { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
-.admin-inline-note.note-warning { color: var(--gold); }
-.admin-inline-note.note-error   { color: var(--error); }
-.admin-inline-note.note-success { color: var(--success); }
-
-/* ── Disabled states for interactive admin controls ── */
-.btn-refresh:disabled,
-.btn-table-action:disabled,
-.btn-table-icon:disabled,
-.btn-gold-full:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
+.luggage-heading {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-
-/* ── Footer-scoped sizing — keep primary CTA inline instead of full-width ── */
-.admin-modal-footer .btn-gold-full {
-  width: auto;
-  padding: 11px 26px;
-  margin-bottom: 0;
-}
-
-/* ── Block variant for full-width table-action buttons (detail panels) ── */
-.btn-table-action.btn-block {
-  width: 100%;
-  justify-content: center;
-  padding: 10px 16px;
-}
-
-/* ── 6-Up Stats Row (seat map: total/occupied/available/rate/business/economy) ── */
-.admin-stats-row.cols-6 { grid-template-columns: repeat(6, 1fr); }
-@media (max-width: 900px) {
-  .admin-stats-row.cols-6 { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 640px) {
-  .admin-stats-row.cols-6 { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* ── Small seat swatch variant, used in seat-map legends ── */
-.seat-btn.seat-sm {
-  width: 38px;
-  height: 28px;
-  font-size: 0.55rem;
-}
-
-/* ── Seat grid wrapper (business/economy seat buttons) ── */
-.admin-seat-grid {
+.seat-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px 20px;
 }
-
-/* ── Split layout — seat map + detail panel side by side ── */
-.admin-split-layout {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 28px;
-  align-items: start;
-}
-@media (max-width: 900px) {
-  .admin-split-layout { grid-template-columns: 1fr; }
-}
-
-.admin-detail-panel {
-  border-left: 1px solid var(--border-dim);
-  padding-left: 24px;
-}
-@media (max-width: 900px) {
-  .admin-detail-panel {
-    border-left: none;
-    border-top: 1px solid var(--border-dim);
-    padding-left: 0;
-    padding-top: 20px;
-  }
-}
-
-/* ── Tiny layout helper ── */
-.ml-auto { margin-left: auto; }
-
-/* ══════════════════════════════════════════════════
-   SIDEBAR SEMANTIC TOKENS
-   Two tokens that replace the raw --muted / --text
-   references inside AdminSidebar.vue.  By keeping
-   the per-theme overrides here (alongside all other
-   token definitions) the sidebar never needs its own
-   [data-theme] blocks.
-
-   Dark theme values   → match the original --muted /
-                         --text so the dark-mode look
-                         is completely unchanged.
-   Light theme values  → flip to legible dark tones so
-                         text is visible on a white
-                         sidebar background.
-   ══════════════════════════════════════════════════ */
-
-/* Dark theme (default) */
-:root {
-    --sidebar-link:       var(--muted);   /* dim but readable on dark bg  */
-    --sidebar-link-hover: var(--text);    /* full brightness on hover      */
-}
-
-/* Light theme */
-[data-theme="light"] {
-    --sidebar-link:       #374151;        /* slate-700 — clear on white bg */
-    --sidebar-link-hover: #111827;        /* slate-900 — strong on hover   */
-}
-
-/* ══════════════════════════════════════════════════
-   ADMIN DASHBOARD SHELL — .admin-layout / .admin-main
-   Mobile-first: stacked by default; side-by-side flex
-   from 992px up. Breakpoint matches AdminSidebar.vue's
-   own drawer breakpoint (991/992px) so the shell and
-   the sidebar switch layouts at the same point.
-   ══════════════════════════════════════════════════ */
-
-.admin-layout {
+.sl-item {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.pn-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
 }
 
-.admin-main {
-  width: 100%;
-  min-width: 0; /* required so .admin-table-wrap's overflow-x:auto can actually engage */
+
+/* ════════════════════════════════════════════════
+   20. SIDEBAR SEMANTIC TOKENS
+   Dark theme (default): matches --muted / --text
+   Light theme: legible dark tones on white sidebar
+   ════════════════════════════════════════════════ */
+:root {
+  --sidebar-link:       var(--muted);
+  --sidebar-link-hover: var(--text);
 }
-
-@media (min-width: 992px) {
-  .admin-layout {
-    flex-direction: row;
-    align-items: stretch;   /* lets the sidebar's gold border-right run full height, not just nav height */
-    gap: 32px;
-  }
-
-  .admin-main {
-    flex: 1 1 0%;
-    width: auto;
-    padding-top: 4px;       /* matches .admin-sidebar's padding-top so both columns share the same vertical start point */
-  }
-}
-
-@media (max-width: 768px) {
-  .admin-stats-row { 
-    grid-template-columns: repeat(2, 1fr); /* Automatically wraps into a clean 2x2 grid */
-  }
-}
-
-@media (max-width: 480px) {
-  /* Optional: Stack into a single row on ultra-narrow phones if text still pinches */
-  .admin-stat-card {
-    padding: 12px;
-  }
+[data-theme="light"] {
+  --sidebar-link:       #374151;   /* slate-700 */
+  --sidebar-link-hover: #111827;   /* slate-900 */
 }

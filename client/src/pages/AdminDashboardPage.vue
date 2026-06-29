@@ -39,8 +39,6 @@ import AdminSidebar from '../components/admin/AdminSidebar.vue'
   Keeping this file free of layout overrides prevents specificity conflicts.
 -->
 <style scoped>
-@import '../components/admin/admin-shared.css';
-
 /* Page-level adjustments only — nothing that touches layout or sidebar */
 .inner-hero {
   /* inherits from global styles */
